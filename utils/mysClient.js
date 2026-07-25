@@ -186,6 +186,11 @@ function getUrlMap(uid, server, game, data = {}) {
       url: `${hostRecord}game_record/app/genshin/api/dailyNote`,
       query: `role_id=${uid}&server=${server}`,
     },
+    // 原神活动日历：POST + body（405 已排除路径错，指向方法错；对称星铁 GET get_act_calender）
+    act_calendar: {
+      url: `${hostRecord}game_record/app/genshin/api/act_calendar`,
+      body: { role_id: Number(uid) || uid, server },
+    },
   }
 }
 

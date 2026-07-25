@@ -1,0 +1,324 @@
+/* 桌面小组件卡 —— 仿米哈游官方桌面小组件竖版样式（原神/星铁/绝区零） */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 620px;
+  font-family: 'yuan', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: transparent;
+}
+
+.wg-wrap {
+  width: 620px;
+  padding: 28px;
+}
+
+.wg-card {
+  position: relative;
+  width: 564px;
+  border-radius: 34px;
+  overflow: hidden;
+  color: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+/* 各游戏主色 */
+.wg-gs {
+  --accent: #8ab4f0;
+  --accent2: #cfe0ff;
+  --banner: linear-gradient(180deg, #1d2b4a 0%, #16223c 100%);
+  --panel: #141d31;
+  --list: rgba(255, 255, 255, 0.06);
+}
+.wg-sr {
+  --accent: #b9a8ff;
+  --accent2: #e3dbff;
+  --banner: linear-gradient(180deg, #322b52 0%, #241f3a 100%);
+  --panel: #221d34;
+  --list: rgba(255, 255, 255, 0.07);
+}
+.wg-zzz {
+  --accent: #b6e84a;
+  --accent2: #d8ff86;
+  --banner: linear-gradient(180deg, #a4d63f 0%, #7fae2c 100%);
+  --panel: #14140f;
+  --list: rgba(255, 255, 255, 0.06);
+}
+
+/* 顶部立绘横幅 */
+.wg-banner {
+  position: relative;
+  height: 316px;
+  background: var(--banner);
+  overflow: hidden;
+}
+.wg-banner-portrait {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+}
+.wg-banner-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0) 62%, var(--panel) 100%);
+}
+.wg-logo {
+  position: absolute;
+  left: 26px;
+  bottom: 20px;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.14);
+  text-transform: uppercase;
+  z-index: 1;
+}
+.wg-gear {
+  position: absolute;
+  top: 22px;
+  left: 22px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  z-index: 2;
+}
+.wg-topbar {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  display: flex;
+  gap: 12px;
+  z-index: 2;
+}
+.wg-chip {
+  padding: 7px 14px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 17px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 面板主体 */
+.wg-body {
+  position: relative;
+  background: var(--panel);
+  padding: 4px 26px 24px;
+}
+
+/* 主资源行 */
+.wg-primary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 4px 22px;
+}
+.wg-primary-icon {
+  width: 66px;
+  height: 66px;
+  flex-shrink: 0;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5));
+}
+.wg-primary-main {
+  flex: 1;
+  min-width: 0;
+}
+.wg-primary-num {
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+.wg-primary-num.warn {
+  color: var(--accent2);
+}
+.wg-primary-num i {
+  font-style: normal;
+  font-size: 24px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+.wg-primary-time {
+  margin-top: 10px;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.62);
+}
+.wg-primary-stats {
+  display: flex;
+  gap: 26px;
+  flex-shrink: 0;
+}
+.wg-pstat {
+  text-align: center;
+}
+.wg-pstat-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+.wg-pstat-key {
+  margin-top: 6px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 星铁卡池（对齐官方小组件右侧：头像 + 标题 + 剩余天数） */
+.wg-pools {
+  display: flex;
+  gap: 22px;
+  flex-shrink: 0;
+}
+.wg-pool {
+  text-align: center;
+}
+.wg-pool-icons {
+  display: flex;
+  justify-content: center;
+}
+.wg-pool-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+.wg-pool-avatar + .wg-pool-avatar {
+  margin-left: -14px;
+}
+.wg-pool-label {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.wg-pool-sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* 底部用户条 */
+.wg-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 6px 4px;
+}
+.wg-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  object-fit: cover;
+}
+.wg-user-text {
+  flex: 1;
+  min-width: 0;
+}
+.wg-name {
+  font-size: 21px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wg-uid {
+  margin-top: 4px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.wg-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.wg-actions .sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 400;
+}
+
+/* 限时活动 */
+.wg-acts {
+  margin-top: 16px;
+  border-radius: 20px;
+  background: var(--list);
+  padding: 16px 20px 6px;
+}
+.wg-acts-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.wg-act-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.wg-act-row + .wg-act-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.wg-act-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.wg-act-name {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 500;
+  color: #eef2f8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wg-act-cd {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+.wg-act-cd.urgent {
+  color: #ff8a6b;
+}
+.wg-act-prog {
+  flex-shrink: 0;
+  min-width: 46px;
+  text-align: center;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+}
+.wg-act-prog.urgent {
+  background: rgba(255, 138, 107, 0.16);
+  color: #ff8a6b;
+}

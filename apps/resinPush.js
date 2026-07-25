@@ -4,17 +4,26 @@
  * 每个用户在群里各自设定「体力阈值」，体力恢复到该值(含)以上时，
  * 机器人在该群 @用户 并发一张体力立绘卡片（复用 TL 的查询与出图）。
  *
- * - 原神 / 星铁分开指令、分开阈值、分开推送
+ * - 原神 / 星铁 / 绝区零分开指令、分开阈值、分开推送
  *   · 原神看「原粹树脂」(current_resin)
  *   · 星铁看「开拓力」(current_stamina)
+ *   · 绝区零看「电量」(energy.progress.current)
  * - 仅在群里 @ 提醒
  * - 达到阈值只 @ 一次；体力回落到阈值以下后自动重新武装，下次满足再提醒
+ * - 两种监控范围：
+ *   · 主号推送（默认）：只盯当前主 UID
+ *   · 全推送：盯该游戏下绑定的全部 UID，每个号各自独立提醒（「全id推送」为兼容别名）
  *
  * 指令（群聊内，谁发就绑定谁）：
- *   #原神体力推送 130      —— 原粹树脂达到 130 时提醒
- *   #星铁体力推送 200      —— 开拓力达到 200 时提醒
- *   #原神体力推送关闭
- *   #星铁体力推送关闭
+ *   #原神体力推送 130      —— 主 UID 原粹树脂达到 130 时提醒
+ *   #星铁体力推送 200      —— 主 UID 开拓力达到 200 时提醒
+ *   #绝区零体力推送 220    —— 主 UID 电量达到 220 时提醒
+ *   #原神体力全推送 130    —— 全部原神 UID 各自达到 130 时分别提醒
+ *   #星铁体力全推送 200
+ *   #绝区零体力全推送 220
+ *   #原神体力推送关闭 / #原神体力全推送关闭
+ *   #星铁体力推送关闭 / #星铁体力全推送关闭
+ *   #绝区零体力推送关闭 / #绝区零体力全推送关闭
  *   #体力推送列表          —— 查看自己的订阅
  */
 
@@ -23,6 +32,7 @@ import path from 'path'
 import plugin from '../../../lib/plugins/plugin.js'
 import Runtime from '../../../lib/plugins/runtime.js'
 import { TL } from './TL.js'
+import { createUser } from '../utils/userBind.js'
 import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
 
 const DATA_DIR = path.join(pluginDir, 'data')
@@ -30,11 +40,35 @@ const CONFIG_FILE = path.join(DATA_DIR, 'resin_push.json')
 
 const DEFAULT_CRON = '*/10 * * * *' // 每 10 分钟检查一次
 
-// 各游戏元信息：字段、上限键、名称、阈值合法上限
+// 各游戏元信息：名称、单位、阈值合法上限、当前值/上限取值函数
+// zzz 电量嵌套在 energy.progress 下，故统一用取值函数抹平差异
 const GAME_META = {
-  gs: { label: '原神', field: 'current_resin', maxField: 'max_resin', unit: '原粹树脂', cap: 200 },
-  sr: { label: '星铁', field: 'current_stamina', maxField: 'max_stamina', unit: '开拓力', cap: 300 },
+  gs: {
+    label: '原神', unit: '原粹树脂', cap: 200, example: 130,
+    getCur: (item) => Number(item?.current_resin) || 0,
+    getMax: (item) => Number(item?.max_resin) || 0,
+    hasField: (item) => item?.current_resin !== undefined && item?.current_resin !== null,
+  },
+  sr: {
+    label: '星铁', unit: '开拓力', cap: 300, example: 200,
+    getCur: (item) => Number(item?.current_stamina) || 0,
+    getMax: (item) => Number(item?.max_stamina) || 0,
+    hasField: (item) => item?.current_stamina !== undefined && item?.current_stamina !== null,
+  },
+  zzz: {
+    label: '绝区零', unit: '电量', cap: 240, example: 220,
+    getCur: (item) => Number(item?.energy?.progress?.current) || 0,
+    getMax: (item) => Number(item?.energy?.progress?.max) || 0,
+    hasField: (item) => item?.energy?.progress?.current !== undefined && item?.energy?.progress?.current !== null,
+  },
 }
+
+const GAMES = ['gs', 'sr', 'zzz']
+
+// 「全id推送」为每个游戏独立的一套订阅：监控该 QQ 名下所有绑定 UID，
+// 每个 UID 各自记录 armed 状态（达到阈值只提醒一次，回落后自动重新武装）。
+// 存储键：gs_all / sr_all / zzz_all
+const ALL_KEY = (game) => `${game}_all`
 
 // ============ 配置读写 ============
 function ensureDir() {
@@ -46,20 +80,39 @@ function ensureDir() {
 /**
  * 结构：
  * {
- *   gs: { "<qq>": { threshold: 130, group: "123", armed: true } },
- *   sr: { "<qq>": { threshold: 200, group: "123", armed: true } }
+ *   // 主 UID 推送（只监控该 QQ 该游戏的主 UID）
+ *   gs:  { "<qq>": { threshold: 130, group: "123", armed: true } },
+ *   sr:  { "<qq>": { threshold: 200, group: "123", armed: true } },
+ *   zzz: { "<qq>": { threshold: 220, group: "123", armed: true } },
+ *   // 全 id 推送（监控该 QQ 该游戏名下所有绑定 UID，各 UID 独立 armed）
+ *   gs_all:  { "<qq>": { threshold: 130, group: "123", uids: { "<uid>": { armed: true } } } },
+ *   sr_all:  { ... },
+ *   zzz_all: { ... }
  * }
  */
 function loadSubs() {
+  const empty = () => {
+    const o = {}
+    for (const g of GAMES) {
+      o[g] = {}
+      o[ALL_KEY(g)] = {}
+    }
+    return o
+  }
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) || {}
-      return { gs: data.gs || {}, sr: data.sr || {} }
+      const subs = {}
+      for (const g of GAMES) {
+        subs[g] = data[g] || {}
+        subs[ALL_KEY(g)] = data[ALL_KEY(g)] || {}
+      }
+      return subs
     }
   } catch (err) {
     logger?.error?.(`[xhh-TL][体力推送] 读取配置失败: ${err.message}`)
   }
-  return { gs: {}, sr: {} }
+  return empty()
 }
 
 function saveSubs(subs) {
@@ -83,11 +136,23 @@ export class resinPush extends plugin {
       event: 'message',
       priority: -Infinity,
       rule: [
+        // 全推送（关闭）— 需在「主 UID 推送」之前匹配，避免被通用式吞掉；「全id」保留为兼容别名
+        { reg: '^\\s*#?原神体力全(?:id)?推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offGsAll' },
+        { reg: '^\\s*#?星铁体力全(?:id)?推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offSrAll' },
+        { reg: '^\\s*#?(?:绝区零|zzz)体力全(?:id)?推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offZzzAll' },
+        // 全推送（设置）
+        { reg: '^\\s*#?原神体力全(?:id)?推送\\s*(\\d{1,3})\\s*$', fnc: 'setGsAll' },
+        { reg: '^\\s*#?星铁体力全(?:id)?推送\\s*(\\d{1,3})\\s*$', fnc: 'setSrAll' },
+        { reg: '^\\s*#?(?:绝区零|zzz)体力全(?:id)?推送\\s*(\\d{1,3})\\s*$', fnc: 'setZzzAll' },
+        // 主 UID 推送（关闭）
         { reg: '^\\s*#?原神体力推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offGs' },
         { reg: '^\\s*#?星铁体力推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offSr' },
+        { reg: '^\\s*#?(?:绝区零|zzz)体力推送\\s*(?:关闭|关|取消|停止)\\s*$', fnc: 'offZzz' },
+        // 主 UID 推送（设置）
         { reg: '^\\s*#?原神体力推送\\s*(\\d{1,3})\\s*$', fnc: 'setGs' },
         { reg: '^\\s*#?星铁体力推送\\s*(\\d{1,3})\\s*$', fnc: 'setSr' },
-        { reg: '^\\s*#?(?:原神|星铁)?体力推送\\s*$', fnc: 'usage' },
+        { reg: '^\\s*#?(?:绝区零|zzz)体力推送\\s*(\\d{1,3})\\s*$', fnc: 'setZzz' },
+        { reg: '^\\s*#?(?:原神|星铁|绝区零|zzz)?体力全?(?:id)?推送\\s*$', fnc: 'usage' },
         { reg: '^\\s*#?体力推送(?:列表|状态|查询)\\s*$', fnc: 'listSubs' },
       ],
     })
@@ -113,6 +178,23 @@ export class resinPush extends plugin {
     return this._set(e, 'sr')
   }
 
+  async setZzz(e) {
+    return this._set(e, 'zzz')
+  }
+
+  // -------- 指令：设置（全 id 推送）--------
+  async setGsAll(e) {
+    return this._setAll(e, 'gs')
+  }
+
+  async setSrAll(e) {
+    return this._setAll(e, 'sr')
+  }
+
+  async setZzzAll(e) {
+    return this._setAll(e, 'zzz')
+  }
+
   /** 功能总开关：锅巴里关闭 resin_push_enable 时，所有指令一并停用 */
   _pushDisabled(e) {
     if (config().resin_push_enable === false) {
@@ -132,7 +214,7 @@ export class resinPush extends plugin {
     const m = (e.msg || '').match(/(\d{1,3})/)
     const threshold = m ? Number(m[1]) : NaN
     if (!Number.isFinite(threshold) || threshold <= 0) {
-      e.reply(`请带上阈值，例如：#${meta.label}体力推送 ${game === 'gs' ? 130 : 200}`, true)
+      e.reply(`请带上阈值，例如：#${meta.label}体力推送 ${meta.example}`, true)
       return true
     }
     if (threshold > meta.cap) {
@@ -158,7 +240,7 @@ export class resinPush extends plugin {
       e.reply(`你的${meta.label}米游社登录已过期，请重新【扫码绑定】后再开启体力推送~`, true)
       return true
     }
-    if (item[meta.field] === undefined || item[meta.field] === null) {
+    if (!meta.hasField(item)) {
       e.reply(`暂时查不到你的${meta.unit}，请确认已正确绑定后再试~`, true)
       return true
     }
@@ -177,6 +259,73 @@ export class resinPush extends plugin {
     return true
   }
 
+  /** 全 id 推送：监控该 QQ 名下所有绑定 UID，每个 UID 各自到阈值各自 @ 一次 */
+  async _setAll(e, game) {
+    if (this._pushDisabled(e)) return true
+    const meta = GAME_META[game]
+    if (!e.isGroup) {
+      e.reply('体力推送只能在群里设置哦，请在需要接收提醒的群内发送该指令~', true)
+      return true
+    }
+    const m = (e.msg || '').match(/(\d{1,3})/)
+    const threshold = m ? Number(m[1]) : NaN
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+      e.reply(`请带上阈值，例如：#${meta.label}体力全推送 ${meta.example}`, true)
+      return true
+    }
+    if (threshold > meta.cap) {
+      e.reply(`阈值过大啦，${meta.unit}最多设到 ${meta.cap}`, true)
+      return true
+    }
+
+    // 枚举该 QQ 该游戏名下所有绑定 UID，逐个校验能否查到体力（已扫码绑定 stoken）
+    const tl = new TL()
+    let uidList
+    try {
+      const noteUser = await createUser(e.user_id, e)
+      uidList = (noteUser.getUidList(game) || []).map((x) => String(x.uid || x)).filter(Boolean)
+    } catch (err) {
+      logger?.error?.(`[xhh-TL][体力推送] 全id枚举失败 ${e.user_id}: ${err.message}`)
+      e.reply('查询绑定 UID 失败，请稍后再试~', true)
+      return true
+    }
+    if (!uidList.length) {
+      e.reply(`你还没有绑定${meta.label}账号，请先【扫码绑定】米游社后再开启体力推送~`, true)
+      return true
+    }
+
+    const validUids = []
+    for (const uid of uidList) {
+      try {
+        const item = await tl.note(e, game, true, null, uid)
+        if (item && item !== '没有' && item !== '过期' && meta.hasField(item)) {
+          validUids.push(uid)
+        }
+      } catch (err) {
+        logger?.error?.(`[xhh-TL][体力推送] 全id校验 ${uid} 失败: ${err.message}`)
+      }
+    }
+    if (!validUids.length) {
+      e.reply(`暂时查不到你的${meta.label}体力，请确认已正确【扫码绑定】后再试~`, true)
+      return true
+    }
+
+    const subs = loadSubs()
+    const uids = {}
+    for (const uid of validUids) uids[uid] = { armed: true }
+    subs[ALL_KEY(game)][String(e.user_id)] = {
+      threshold,
+      group: String(e.group_id),
+      uids,
+    }
+    saveSubs(subs)
+    e.reply(
+      `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）`,
+      true,
+    )
+    return true
+  }
+
   // -------- 指令：关闭 --------
   async offGs(e) {
     return this._off(e, 'gs')
@@ -184,6 +333,22 @@ export class resinPush extends plugin {
 
   async offSr(e) {
     return this._off(e, 'sr')
+  }
+
+  async offZzz(e) {
+    return this._off(e, 'zzz')
+  }
+
+  async offGsAll(e) {
+    return this._offAll(e, 'gs')
+  }
+
+  async offSrAll(e) {
+    return this._offAll(e, 'sr')
+  }
+
+  async offZzzAll(e) {
+    return this._offAll(e, 'zzz')
   }
 
   async _off(e, game) {
@@ -200,6 +365,21 @@ export class resinPush extends plugin {
     return true
   }
 
+  async _offAll(e, game) {
+    const meta = GAME_META[game]
+    const subs = loadSubs()
+    const qq = String(e.user_id)
+    const key = ALL_KEY(game)
+    if (subs[key][qq]) {
+      delete subs[key][qq]
+      saveSubs(subs)
+      e.reply(`已关闭${meta.label}体力全推送`, true)
+    } else {
+      e.reply(`你还没有开启${meta.label}体力全推送`, true)
+    }
+    return true
+  }
+
   // -------- 指令：用法 --------
   async usage(e) {
     if (this._pushDisabled(e)) return true
@@ -208,7 +388,11 @@ export class resinPush extends plugin {
         '📌 体力阈值推送用法',
         '#原神体力推送 130   原粹树脂达到130时@你并发图',
         '#星铁体力推送 200   开拓力达到200时@你并发图',
-        '#原神体力推送关闭 / #星铁体力推送关闭',
+        '#绝区零体力推送 220 电量达到220时@你并发图',
+        '#原神体力全推送 130   监控名下所有原神UID，各自达标各自发图',
+        '（星铁/绝区零同理：#星铁体力全推送 200 / #绝区零体力全推送 220）',
+        '#原神体力推送关闭 / #星铁体力推送关闭 / #绝区零体力推送关闭',
+        '#原神体力全推送关闭 / #星铁体力全推送关闭 / #绝区零体力全推送关闭',
         '#体力推送列表        查看你的订阅',
         '（需在群里设置，仅在该群@提醒；达到后提醒一次，回落后自动恢复监控）',
       ].join('\n'),
@@ -223,13 +407,22 @@ export class resinPush extends plugin {
     const qq = String(e.user_id)
     const lines = ['📋 你的体力推送订阅：']
     let has = false
-    for (const game of ['gs', 'sr']) {
+    for (const game of GAMES) {
+      const meta = GAME_META[game]
       const sub = subs[game][qq]
       if (sub) {
         has = true
-        const meta = GAME_META[game]
         lines.push(
           `· ${meta.label}：${meta.unit} ≥ ${sub.threshold}（群 ${sub.group}）${sub.armed ? '' : ' [已提醒，待回落]'}`,
+        )
+      }
+      const allSub = subs[ALL_KEY(game)][qq]
+      if (allSub) {
+        has = true
+        const uidEntries = Object.entries(allSub.uids || {})
+        const armedCnt = uidEntries.filter(([, u]) => u.armed).length
+        lines.push(
+          `· ${meta.label}[全推送]：${meta.unit} ≥ ${allSub.threshold}（群 ${allSub.group}，${uidEntries.length} 个UID，${armedCnt} 个监控中）`,
         )
       }
     }
@@ -248,7 +441,7 @@ export class resinPush extends plugin {
     const scale = getRenderScaleStyle(cfg, 1.0)
     const tl = new TL()
 
-    for (const game of ['gs', 'sr']) {
+    for (const game of GAMES) {
       const meta = GAME_META[game]
       for (const qq of Object.keys(subs[game])) {
         const sub = subs[game][qq]
@@ -257,7 +450,7 @@ export class resinPush extends plugin {
           const item = await this.queryResin(tl, qq, game, sub.group)
           if (!item || item === '没有' || item === '过期' || item === false) continue
 
-          const cur = Number(item[meta.field]) || 0
+          const cur = meta.getCur(item)
 
           // 回落到阈值以下 → 重新武装
           if (cur < sub.threshold) {
@@ -280,19 +473,62 @@ export class resinPush extends plugin {
           logger?.error?.(`[xhh-TL][体力推送] ${meta.label} ${qq} 检查失败: ${err.message}`)
         }
       }
+
+      // 全 id 推送：逐个 UID 独立判断/武装/推送
+      const allSubs = subs[ALL_KEY(game)]
+      for (const qq of Object.keys(allSubs)) {
+        const allSub = allSubs[qq]
+        if (!allSub || !allSub.group || !allSub.uids) continue
+        for (const uid of Object.keys(allSub.uids)) {
+          const state = allSub.uids[uid]
+          if (!state) continue
+          try {
+            const item = await this.queryResinUid(tl, qq, game, allSub.group, uid)
+            if (!item || item === '没有' || item === '过期' || item === false) continue
+
+            const cur = meta.getCur(item)
+
+            // 回落到阈值以下 → 重新武装
+            if (cur < allSub.threshold) {
+              if (!state.armed) {
+                state.armed = true
+                changed = true
+              }
+              continue
+            }
+
+            // 达到阈值且仍处于武装状态 → 推送一次
+            if (state.armed) {
+              const ok = await this.pushOne(tl, qq, game, allSub, item, scale, uid)
+              if (ok) {
+                state.armed = false
+                changed = true
+              }
+            }
+          } catch (err) {
+            logger?.error?.(`[xhh-TL][体力推送] ${meta.label}[全id] ${qq}/${uid} 检查失败: ${err.message}`)
+          }
+        }
+      }
     }
 
     if (changed) saveSubs(subs)
   }
 
-  /** 用「假 e + Runtime」复用 TL.note 查询体力 */
+  /** 用「假 e + Runtime」复用 TL.note 查询体力（主 UID） */
   async queryResin(tl, qq, game, groupId) {
     const fakeE = this.makeFakeE(qq, groupId)
     return await tl.note(fakeE, game, true, null, null)
   }
 
-  /** 出图并在群里 @ 用户发送 */
-  async pushOne(tl, qq, game, sub, item, scale) {
+  /** 查询指定 UID 的体力（全 id 推送用） */
+  async queryResinUid(tl, qq, game, groupId, uid) {
+    const fakeE = this.makeFakeE(qq, groupId)
+    return await tl.note(fakeE, game, true, null, uid)
+  }
+
+  /** 出图并在群里 @ 用户发送；forceUid 指定时用于日志/渲染定位（全 id 推送） */
+  async pushOne(tl, qq, game, sub, item, scale, forceUid = null) {
     const meta = GAME_META[game]
     const fakeE = this.makeFakeE(qq, sub.group)
 
@@ -311,8 +547,8 @@ export class resinPush extends plugin {
     }
     if (!imgSeg) return false
 
-    const cur = Number(item[meta.field]) || 0
-    const max = Number(item[meta.maxField]) || 0
+    const cur = meta.getCur(item)
+    const max = meta.getMax(item)
     const full = max > 0 && cur >= max
     const tip = full
       ? `你的${meta.unit}已经满啦(${cur}/${max})，快去消耗吧~`

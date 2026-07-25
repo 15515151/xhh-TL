@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+  <link rel="stylesheet" type="text/css" href="{{ppath}}Tl/tl.css" />
+  <link rel="stylesheet" type="text/css" href="{{ppath}}Tl/widget.css" />
+</head>
+
+<body {{sys.scale}}>
+  <div class="wg-wrap">
+    <div class="wg-card wg-{{d.game}}">
+      <!-- 顶部立绘横幅 -->
+      <div class="wg-banner">
+        {{if d.portrait}}
+        <div class="wg-banner-portrait" style="background-image: url({{d.portrait}})"></div>
+        {{/if}}
+        <div class="wg-banner-shade"></div>
+        <div class="wg-gear">⚙</div>
+        <div class="wg-topbar">
+          {{if d.uid}}<div class="wg-chip">UID {{d.uid}}</div>{{/if}}
+        </div>
+        <div class="wg-logo">{{d.game == 'sr' ? 'STAR RAIL' : d.game == 'zzz' ? 'ZENLESS' : 'GENSHIN'}}</div>
+      </div>
+
+      <!-- 面板主体 -->
+      <div class="wg-body">
+        <!-- 主资源：大号数字 + 恢复时间 -->
+        {{if d.primary}}
+        <div class="wg-primary">
+          <div class="wg-primary-icon" style="background-image: url({{ppath}}Tl/imgs/{{d.primary.icon}})"></div>
+          <div class="wg-primary-main">
+            <div class="wg-primary-num {{d.primary.warn ? 'warn' : ''}}">{{d.primary.cur}}<i>/{{d.primary.max}}</i></div>
+            <div class="wg-primary-time">恢复时间 {{d.time}}</div>
+          </div>
+          {{if d.pools && d.pools.length}}
+          <div class="wg-pools">
+            {{each d.pools pool}}
+            <div class="wg-pool">
+              <div class="wg-pool-icons">
+                {{each pool.icons ic}}
+                <div class="wg-pool-avatar" style="background-image: url({{ic}})"></div>
+                {{/each}}
+              </div>
+              {{if pool.label}}<div class="wg-pool-label">{{pool.label}}</div>{{/if}}
+              {{if pool.sub}}<div class="wg-pool-sub">{{pool.sub}}</div>{{/if}}
+            </div>
+            {{/each}}
+          </div>
+          {{else}}
+          <div class="wg-primary-stats">
+            {{each d.stats st}}
+            <div class="wg-pstat">
+              <div class="wg-pstat-val">{{st.val}}</div>
+              <div class="wg-pstat-key">{{st.key}}</div>
+            </div>
+            {{/each}}
+          </div>
+          {{/if}}
+        </div>
+        {{/if}}
+
+        <!-- 限时活动 -->
+        {{if d.acts && d.acts.length}}
+        <div class="wg-acts">
+          <div class="wg-acts-title">限时活动</div>
+          {{each d.acts act}}
+          <div class="wg-act-row">
+            <span class="wg-act-dot"></span>
+            <span class="wg-act-name">{{act.title}}</span>
+            {{if act.countdown}}<span class="wg-act-cd {{act.urgent ? 'urgent' : ''}}">{{act.countdown}}</span>{{/if}}
+            {{if act.progress}}<span class="wg-act-prog {{act.urgent ? 'urgent' : ''}}">{{act.progress}}</span>{{/if}}
+          </div>
+          {{/each}}
+        </div>
+        {{/if}}
+
+        <!-- 底部用户条 -->
+        <div class="wg-footer">
+          <img class="wg-avatar" src="https://q1.qlogo.cn/g?b=qq&s=640&nk={{qq}}.jpg" />
+          <div class="wg-user-text">
+            <div class="wg-name">{{qqname}}</div>
+            {{if d.uid}}<div class="wg-uid">UID：{{d.uid}}</div>{{/if}}
+          </div>
+          <div class="wg-actions">
+            <span>小花火体力</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

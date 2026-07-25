@@ -52,12 +52,13 @@ export function supportGuoba() {
           field: 'tl_card_style',
           label: '体力卡片样式',
           bottomHelpMessage:
-            '经典=多合一卡片；立绘卡=右侧大角色立绘（原神/星铁走 miao 目录，绝区零走 zzzrole）',
+            '经典=多合一卡片；立绘卡=右侧大角色立绘；桌面小组件=仿米哈游官方桌面小组件竖卡（立绘复用同一目录）',
           component: 'Select',
           componentProps: {
             options: [
               { label: '经典（默认）', value: 'classic' },
-              { label: '立绘卡', value: 'portrait' }
+              { label: '立绘卡', value: 'portrait' },
+              { label: '桌面小组件', value: 'widget' }
             ]
           }
         },
@@ -89,6 +90,24 @@ export function supportGuoba() {
           component: 'Input',
           componentProps: {
             placeholder: 'plugins/xhh-TL/resources/stat/imgs/bg1.png'
+          }
+        },
+        {
+          field: 'tl_widget_activity',
+          label: '小组件卡·限时活动',
+          bottomHelpMessage:
+            '仅桌面小组件卡生效。开启后卡片底部展示当前限时活动（活动名 + 进度 + 倒计时）。星铁/绝区零取自体力 widget 接口自带字段，零额外请求；原神 widget 不返回活动，需完整 CK 额外拉取 act_calendar，失败静默隐藏。关闭则不显示',
+          component: 'Switch'
+        },
+        {
+          field: 'tl_widget_activity_limit',
+          label: '小组件卡·活动条数',
+          bottomHelpMessage: '限时活动最多显示几条，默认 4',
+          component: 'InputNumber',
+          componentProps: {
+            min: 1,
+            max: 10,
+            placeholder: '默认 4'
           }
         },
         {

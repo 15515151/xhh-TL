@@ -78,8 +78,8 @@ export function buildHelpGroups() {
         },
         {
           icon: 'zzz.webp',
-          title: '#开启绝区零体力 / #关闭绝区零体力',
-          desc: '控制「体力总览」是否包含绝区零（默认显示）',
+          title: '#开启/关闭原神体力 · 星铁体力 · 绝区零体力',
+          desc: '控制「体力总览」是否包含对应游戏（默认全显示，单独查询不受影响）',
         },
         {
           icon: 'gs-resin.webp',
@@ -92,9 +92,19 @@ export function buildHelpGroups() {
           desc: '开拓力达阈值时在群@你发图；关闭：#星铁体力推送关闭',
         },
         {
+          icon: 'zzz-battery.webp',
+          title: '#绝区零体力推送 220',
+          desc: '电量达阈值时在群@你发图；关闭：#绝区零体力推送关闭',
+        },
+        {
+          icon: 'multi.webp',
+          title: '#原神/星铁/绝区零体力全推送 130',
+          desc: '监控名下所有UID，各自达标各自@发图；关闭：加「关闭」',
+        },
+        {
           icon: 'signin.webp',
           title: '#体力推送列表',
-          desc: '查看自己的体力推送订阅',
+          desc: '查看自己的体力推送订阅（含全id）',
         },
         {
           icon: 'mask.webp',
@@ -245,6 +255,11 @@ export function buildHelpGroups() {
           icon: 'active.webp',
           title: '#清理临时文件 #小花火清理tmp',
           desc: '主人：清理 data/tmp（加「全部」清空）',
+        },
+        {
+          icon: 'mask.webp',
+          title: '#删除ck #原神删除ck',
+          desc: '配合 genshin 删号：清理残留 stoken，避免被删账号复活查询',
         },
       ],
     },

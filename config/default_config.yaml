@@ -8,17 +8,24 @@ render_scale: 1.0
 # 体力卡片样式（原神/星铁/绝区零均生效）
 #   classic  = 经典多合一卡片（默认）
 #   portrait = 大立绘卡片（右侧角色立绘：原神/星铁走 miao，绝区零走 zzzrole）
+#   widget   = 桌面小组件竖卡（仿米哈游官方桌面小组件，顶部立绘复用同一目录）
 tl_card_style: classic
-# 立绘卡的立绘目录（tl_card_style=portrait 时生效，仅原神/星铁）
+# 立绘卡的立绘目录（tl_card_style=portrait/widget 时生效，仅原神/星铁）
 # 默认用 miao-plugin 角色面板图，按游戏自动过滤原神/星铁角色
 # 结构：子文件夹=角色名，内含图片随机抽取。也可改成自己的图库或绝对路径
 tl_portrait_folder: plugins/miao-plugin/resources/profile/normal-character
-# 绝区零立绘目录（tl_card_style=portrait 时生效）
+# 绝区零立绘目录（tl_card_style=portrait/widget 时生效）
 # 默认插件内置 resources/zzzrole（平铺 IconRole*.png/webp）；可改成自己的图库或绝对路径
 tl_zzz_portrait_folder: plugins/xhh-TL/resources/zzzrole
-# 立绘卡的底图（tl_card_style=portrait 时生效）
+# 立绘卡的底图（tl_card_style=portrait 时生效；widget 竖卡不使用底图）
 # 支持：单张图片文件 / 目录（目录则随机抽一张）；相对 Yunzai 根或绝对路径
 tl_portrait_bg: plugins/xhh-TL/resources/stat/imgs/bg1.png
+# 桌面小组件卡（tl_card_style=widget）底部是否显示「限时活动」区块
+# 星铁/绝区零：数据取自体力 widget 接口自带字段，零额外请求
+# 原神：widget 接口不返回活动，需完整 CK 额外拉取 act_calendar；失败静默隐藏，不影响出图
+tl_widget_activity: true
+# 限时活动最多显示几条
+tl_widget_activity_limit: 4
 tl_priority: -999
 show_all_bindings: true
 tl_render_mode: merge

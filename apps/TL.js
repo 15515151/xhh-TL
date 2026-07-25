@@ -10,6 +10,7 @@ import common from '../../../lib/common/common.js';
 import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg } from '../utils/pluginConfig.js';
 import { extractRenderBuffer } from '../utils/renderImage.js';
 import { replyQuote, replyForward } from '../utils/replyHelper.js';
+import { prepareMysContext } from '../utils/runtimePatch.js';
 
 // ============ 用户 UID 显示设置 ============
 async function getShowUid(qq) {
@@ -18,10 +19,23 @@ async function getShowUid(qq) {
   return val === null ? true : val !== 'false';
 }
 
-// 每个用户可单独开关「体力总览」里是否显示绝区零，默认 true（显示）
-async function getShowZzz(qq) {
-  const val = await redis.get(`xhh:show_zzz:${qq}`);
+// 每个用户可单独开关「体力总览」里是否显示某游戏，默认 true（显示）
+// 关闭后总览不查/不显示该游戏；单独 #原神体力/#星铁体力/#绝区零体力 不受影响
+async function getShowGame(qq, game) {
+  const val = await redis.get(`xhh:show_${game}:${qq}`);
   return val === null ? true : val !== 'false';
+}
+
+async function getShowGs(qq) {
+  return getShowGame(qq, 'gs');
+}
+
+async function getShowSr(qq) {
+  return getShowGame(qq, 'sr');
+}
+
+async function getShowZzz(qq) {
+  return getShowGame(qq, 'zzz');
 }
 
 // ============ MHY 工具函数 (内联自 xhh/system/mhy.js) ============
@@ -213,6 +227,14 @@ export class TL extends plugin {
           fnc: 'toggleUidDisplay',
         },
         {
+          reg: '^\\s*#?(?:开启|打开|关闭|关掉)(?:原神|ys)体力\\s*$',
+          fnc: 'toggleGsDisplay',
+        },
+        {
+          reg: '^\\s*#?(?:开启|打开|关闭|关掉)(?:星铁|xt)体力\\s*$',
+          fnc: 'toggleSrDisplay',
+        },
+        {
           reg: '^\\s*#?(?:开启|打开|关闭|关掉)(?:绝区零|zzz)体力\\s*$',
           fnc: 'toggleZzzDisplay',
         },
@@ -265,23 +287,25 @@ export class TL extends plugin {
 
     let resultData = {};
 
-    // 绝区零显示开关：仅影响「体力总览」，默认显示；关闭后总览不查/不显示 zzz。
-    // 以被查者为准：某人关了绝区零后，无论他自己查还是别人艾特查他，都不显示其绝区零。
-    // 单独 #绝区零体力 不受此开关影响。
-    const showZzz = isQueryAll ? await getShowZzz(targetQq || e.user_id) : true;
+    // 各游戏显示开关：仅影响「体力总览」，默认显示；关闭后总览不查/不显示该游戏。
+    // 以被查者为准：某人关了某游戏后，无论他自己查还是别人艾特查他，都不显示其该游戏。
+    // 单独 #原神体力/#星铁体力/#绝区零体力 不受此开关影响。
+    const overviewQq = targetQq || e.user_id;
+    const [showGs, showSr, showZzz] = isQueryAll
+      ? await Promise.all([getShowGs(overviewQq), getShowSr(overviewQq), getShowZzz(overviewQq)])
+      : [true, true, true];
 
     if (isQueryAll) {
       hasAllData = true;
       logger.info('[xhh-TL][note_] 开始查询所有游戏体力');
       const [gsData, srData, zzzData] = await Promise.all([
-        this.note(e, 'gs', true, targetQq),
-        this.note(e, 'sr', true, targetQq),
+        showGs ? this.note(e, 'gs', true, targetQq) : Promise.resolve('没有'),
+        showSr ? this.note(e, 'sr', true, targetQq) : Promise.resolve('没有'),
         showZzz ? getZZZData() : Promise.resolve('没有'),
       ]);
-      resultData = {
-        gs_data: gsData,
-        sr_data: srData,
-      };
+      resultData = {};
+      if (showGs) resultData.gs_data = gsData;
+      if (showSr) resultData.sr_data = srData;
       if (showZzz) resultData.zzz_data = zzzData;
     } else if (isStarRail) {
       resultData = { sr_data: await this.note(e, 'sr', false, targetQq) };
@@ -291,6 +315,11 @@ export class TL extends plugin {
       resultData = { gs_data: await this.note(e, 'gs', false, targetQq) };
     }
 
+    // 总览时三游戏均被关闭 → 无可展示项，给出明确提示
+    if (isQueryAll && !Object.keys(resultData).length) {
+      e.reply('你已关闭原神/星铁/绝区零体力显示，请先开启其中之一再查询总览~', true);
+      return true;
+    }
     if (Object.values(resultData).every(v => v === '没有')) {
       if (hasAllData) e.reply('没有绑定米游社，请[扫码绑定]米游社', true);
       return true;
@@ -348,11 +377,11 @@ export class TL extends plugin {
 
     const { ..._data_ } = { ...renderData, ...resultData };
 
-    // 立绘卡样式：原神/星铁/绝区零均走大立绘卡片
-    if (config().tl_card_style === 'portrait') {
+    // 立绘卡 / 桌面小组件卡：原神/星铁/绝区零均走 renderPortraitFlow（内部按样式分流）
+    if (['portrait', 'widget'].includes(config().tl_card_style)) {
       const displayInfo = { qq: displayQq, qqname: displayName };
       const handled = await this.renderPortraitFlow(e, {
-        isQueryAll, isStarRail, isZZZ, isGenshin, showZzz,
+        isQueryAll, isStarRail, isZZZ, isGenshin, showGs, showSr, showZzz,
         resultData: _data_, displayInfo, targetQq,
       });
       if (handled) return true;
@@ -436,19 +465,22 @@ export class TL extends plugin {
   async replyClassicTl(e, opts) {
     const {
       displayQq, displayName, renderData, resultData: _data_,
-      isQueryAll, isStarRail, isZZZ, isGenshin, showZzz, targetQq,
+      isQueryAll, isStarRail, isZZZ, isGenshin,
+      showGs = true, showSr = true, showZzz = true, targetQq,
     } = opts;
     const cfg = config();
     const renderScale = getRenderScaleStyle(cfg, 2.0);
     const keyMap = { gs: 'gs_list', sr: 'sr_list', zzz: 'zzz_list' };
     const cardsPerMsg = cfg.tl_cards_per_msg || 3;
+    // 总览时按被查者的各游戏开关过滤（单独查询不受影响）
+    const overviewShow = { gs: showGs, sr: showSr, zzz: showZzz };
 
     if (cfg.show_all_bindings) {
       const games = (isQueryAll ? ['gs', 'sr', 'zzz']
         : isStarRail ? ['sr']
         : isZZZ ? ['zzz']
         : isGenshin ? ['gs']
-        : ['gs']).filter(g => !(isQueryAll && g === 'zzz' && !showZzz));
+        : ['gs']).filter(g => !(isQueryAll && !overviewShow[g]));
 
       const allGameData = {};
       let totalUids = 0;
@@ -621,6 +653,20 @@ export class TL extends plugin {
     return true;
   }
 
+  async toggleGsDisplay(e) {
+    const enable = /开启|打开/.test(e.msg);
+    await redis.set(`xhh:show_gs:${e.user_id}`, String(enable));
+    e.reply(enable ? '已开启原神体力显示，体力总览将包含原神' : '已关闭原神体力显示，体力总览将隐藏原神');
+    return true;
+  }
+
+  async toggleSrDisplay(e) {
+    const enable = /开启|打开/.test(e.msg);
+    await redis.set(`xhh:show_sr:${e.user_id}`, String(enable));
+    e.reply(enable ? '已开启星铁体力显示，体力总览将包含星铁' : '已关闭星铁体力显示，体力总览将隐藏星铁');
+    return true;
+  }
+
   async toggleZzzDisplay(e) {
     const enable = /开启|打开/.test(e.msg);
     await redis.set(`xhh:show_zzz:${e.user_id}`, String(enable));
@@ -632,17 +678,20 @@ export class TL extends plugin {
 
   // 立绘卡总流程：gs/sr/zzz 均渲染立绘卡，合并回复
   async renderPortraitFlow(e, opts) {
-    const { isQueryAll, isStarRail, isZZZ, isGenshin, resultData, displayInfo, targetQq, showZzz = true } = opts;
+    const { isQueryAll, isStarRail, isZZZ, isGenshin, resultData, displayInfo, targetQq, showGs = true, showSr = true, showZzz = true } = opts;
     const games = (isQueryAll ? ['gs', 'sr', 'zzz']
       : isStarRail ? ['sr']
         : isZZZ ? ['zzz']
           : isGenshin ? ['gs']
-            : ['gs']).filter(g => !(isQueryAll && g === 'zzz' && !showZzz));
+            : ['gs']).filter(g => !isQueryAll
+              || (g === 'gs' ? showGs : g === 'sr' ? showSr : showZzz));
 
     const cfg = config();
     const multi = cfg.show_all_bindings;
-    // 立绘卡 body 本身 900px（横版宽卡），基准倍率用 1.0 即可，避免出图过大
-    const portraitScale = getRenderScaleStyle(cfg, 1.0);
+    // 卡片样式：widget=桌面小组件竖卡，其余=立绘横卡
+    const isWidget = cfg.tl_card_style === 'widget';
+    // 立绘卡 body 900px（横版宽卡）基准 1.0；小组件卡 620px（竖版）用 1.4 提清晰度
+    const portraitScale = getRenderScaleStyle(cfg, isWidget ? 1.4 : 1.0);
     const qq = targetQq || e.user_id;
 
     // 收集每个游戏的数据列表
@@ -668,7 +717,9 @@ export class TL extends plugin {
       const list = dataMap[game];
       if (!list) continue;
       for (const item of list) {
-        const seg = await this.renderPortraitCard(e, game, item, displayInfo, portraitScale);
+        const seg = isWidget
+          ? await this.renderWidgetCard(e, game, item, displayInfo, portraitScale)
+          : await this.renderPortraitCard(e, game, item, displayInfo, portraitScale);
         if (seg) segments.push(seg);
       }
     }
@@ -690,8 +741,11 @@ export class TL extends plugin {
     return true;
   }
 
-  // 单个 gs/sr/zzz UID → 一张立绘卡 segment
-  async renderPortraitCard(e, game, item, displayInfo, renderScale) {
+  /**
+   * 构建体力卡通用数据（立绘卡 / 小组件卡共用）
+   * 返回 d = { game, uid, time, portrait, bg, bars, stats, status }
+   */
+  async buildStaminaData(game, item, displayInfo) {
     const showUid = await getShowUid(displayInfo.qq);
     const uid = showUid ? item.uid : '****';
     const portrait = pickCharacterPortrait(game);
@@ -716,40 +770,40 @@ export class TL extends plugin {
         { ok: done(item.finished_task_num, item.total_task_num), text: done(item.finished_task_num, item.total_task_num) ? '每日委托已完成！' : '每日委托未完成' },
         { ok: !!item.is_extra_task_reward_received, text: item.is_extra_task_reward_received ? '委托奖励已领取！' : '委托奖励未领取' },
       ];
+      // 砺行修远：widget 原生 week_active_progress（本周 / 本期）
+      const wap = item.week_active_progress || {};
+      const hasWap = wap.unlock === true;
       stats = [
         { val: item.level != null ? `Lv.${item.level}` : '—', key: '冒险等阶' },
         { val: `${item.current_expedition_num || 0}/${item.max_expedition_num || 0}`, key: '探索派遣' },
-        { val: `${item.finished_task_num || 0}/${item.total_task_num || 0}`, key: '每日委托' },
+        hasWap
+          ? { val: `${wap.period_progress_current || 0}/${wap.period_progress_total || 0}`, key: '砺行修远' }
+          : { val: `${item.finished_task_num || 0}/${item.total_task_num || 0}`, key: '每日委托' },
       ];
     } else if (game === 'zzz') {
       const energy = item.energy?.progress || {};
       const cur = Number(energy.current) || 0;
       const max = Number(energy.max) || 240;
       const vitality = item.vitality || {};
-      const bounty = item.s2_bounty_commission || { num: 0, total: 0 };
-      const weekly = item.weekly_task || {};
-      const cardDone = item.card_sign === 'CardSignDone';
-      const vhsDoing = item.vhs_sale?.sale_state === 'SaleStateDoing';
       bars = [
         { icon: '电池.png', name: '电量', cur, max, pct: pct(cur, max), warn: max > 0 && cur >= max },
         { icon: '活跃度.png', name: '今日活跃度', cur: Number(vitality.current) || 0, max: Number(vitality.max) || 0, pct: pct(vitality.current, vitality.max), warn: false },
-        { icon: 'zzz.png', name: '悬赏委托', cur: Number(bounty.num) || 0, max: Number(bounty.total) || 0, pct: pct(bounty.num, bounty.total), warn: false },
       ];
-      status = [
-        { ok: cardDone, text: cardDone ? '刮刮卡已签到！' : '刮刮卡尚未签到' },
-        { ok: vhsDoing, text: vhsDoing ? '录像店营业中' : '录像店待结算' },
-      ];
-      const weekCur = Number(weekly.cur_point);
-      const weekMax = Number(weekly.max_point);
+      // widget 原生 note_list：{name, value, value_highlight}，直接对应官方任务清单
+      const noteList = Array.isArray(item.note_list) ? item.note_list : [];
+      const doneReg = /(已完成|已签到|营业中|已领取|已满)/;
+      const lockReg = /(未解锁|未开启)/;
+      status = noteList.map((n) => ({
+        ok: doneReg.test(n.value || ''),
+        locked: lockReg.test(n.value || ''),
+        text: `${n.name}：${n.value || ''}`,
+        name: n.name,
+        value: n.value || '',
+      }));
       stats = [
         { val: item.level != null ? `Lv.${item.level}` : '—', key: '绳网等级' },
-        {
-          val: Number.isFinite(weekCur) && Number.isFinite(weekMax)
-            ? `${weekCur}/${weekMax}`
-            : '未解锁',
-          key: '丽都周纪',
-        },
-        { val: `${Number(bounty.num) || 0}/${Number(bounty.total) || 0}`, key: '悬赏委托' },
+        { val: `${Number(vitality.current) || 0}/${Number(vitality.max) || 0}`, key: '今日活跃' },
+        { val: cur >= max && max > 0 ? '已满' : `${cur}/${max}`, key: '电量' },
       ];
     } else {
       const st = Number(item.current_stamina) || 0;
@@ -769,7 +823,7 @@ export class TL extends plugin {
       ];
     }
 
-    const d = {
+    return {
       game,
       uid,
       time: item.time || '已满',
@@ -778,7 +832,191 @@ export class TL extends plugin {
       bars,
       stats,
       status,
+      acts: this.buildActivities(game, item),
+      pools: this.buildCardPools(game, item),
     };
+  }
+
+  /**
+   * 星铁卡池（widget 原生 activity_calendar_v2.card_pool_list，官方小组件右上角同源）
+   * 每条：{ avatar_list:[{icon_url}], title:[{content}], id }
+   * 统一输出 { label, sub, icons:[url] }：label=首个非「剩余」标题，sub=倒计时
+   * 仅 sr 有；其余游戏返回空数组
+   */
+  buildCardPools(game, item) {
+    if (game !== 'sr') return [];
+    const list = item.activity_calendar_v2?.card_pool_list;
+    if (!Array.isArray(list)) return [];
+
+    const pools = [];
+    for (const p of list) {
+      if (!p) continue;
+      const titles = Array.isArray(p.title)
+        ? p.title.map((t) => (t && typeof t === 'object' ? t.content ?? '' : String(t ?? ''))).filter(Boolean)
+        : [];
+      // 「剩余N天」当副标题，其余当主标题（联动 / 姬子·启行）
+      const isCd = (s) => /剩余|天|结束|开启/.test(s);
+      const label = titles.find((t) => !isCd(t)) || titles[0] || '';
+      const sub = titles.find(isCd) || '';
+      const icons = Array.isArray(p.avatar_list)
+        ? p.avatar_list.map((a) => a?.icon_url).filter(Boolean)
+        : [];
+      if (!icons.length && !label) continue;
+      pools.push({ label, sub, icons });
+    }
+    return pools;
+  }
+
+  /**
+   * 解析「限时活动 / 任务清单」，输出统一结构 { title, progress, countdown, urgent }
+   * - gs: item.act_calendar（cookie 接口 act_calendar，act_list + fixed_act_list）
+   *       type 映射进度：幽境危战→难度罗马数字，渊月螺旋/剧诗→星数，其余→进行中
+   * - sr: item.activity_calendar_v2.activity_list（title/progress/count_down 均为 [{content,is_highlight}]）
+   * - zzz: 任务清单 note_list（{name, value, value_highlight}）+ 活动 activity_list
+   * 字段缺失即空串，绝不报错
+   */
+  buildActivities(game, item) {
+    // 把 [{content, is_highlight}] 或字符串/数组，压成 { text, highlight }
+    const flat = (val) => {
+      if (val == null) return { text: '', highlight: false };
+      if (typeof val === 'string') return { text: val, highlight: false };
+      if (Array.isArray(val)) {
+        return {
+          text: val.map((x) => (x && typeof x === 'object' ? x.content ?? '' : x ?? '')).join(''),
+          highlight: val.some((x) => x && typeof x === 'object' && x.is_highlight === true),
+        };
+      }
+      if (typeof val === 'object') return { text: val.content ?? '', highlight: val.is_highlight === true };
+      return { text: String(val), highlight: false };
+    };
+
+    const acts = [];
+
+    // 原神：cookie 接口 act_calendar（widget 的 act_list 恒空，不用）
+    if (game === 'gs') {
+      return this.buildGsActivities(item.act_calendar);
+    }
+
+    // zzz 的任务清单走 note_list（官方小组件同款那几行），结构与 sr 不同，单独解析
+    if (game === 'zzz') {
+      const noteList = Array.isArray(item.note_list) ? item.note_list : [];
+      for (const n of noteList) {
+        if (!n) continue;
+        const title = String(n.name ?? '').trim();
+        if (!title) continue;
+        acts.push({
+          title,
+          progress: String(n.value ?? '').trim(),
+          countdown: '',
+          urgent: n.value_highlight === true,
+        });
+      }
+    }
+
+    // 通用活动列表（sr 走 activity_calendar_v2；zzz 的 activity_list 有活动时也带上）
+    let rawList = [];
+    if (game === 'sr') rawList = item.activity_calendar_v2?.activity_list || [];
+    else if (game === 'zzz') rawList = item.activity_list || [];
+    if (!Array.isArray(rawList)) rawList = [];
+
+    for (const it of rawList) {
+      if (!it) continue;
+      const title = flat(it.title).text.trim();
+      if (!title) continue;
+      const p = flat(it.progress);
+      const c = flat(it.count_down ?? it.countdown);
+      acts.push({
+        title,
+        progress: p.text.trim(),
+        countdown: c.text.trim(),
+        urgent: c.highlight || p.highlight,
+      });
+    }
+    return acts;
+  }
+
+  /**
+   * 原神 act_calendar 解析（act_list 限时活动 + fixed_act_list 固定活动）
+   * status: 1=未开始 2=进行中；countdown_seconds 秒
+   * 进度列按活动类型：幽境危战→难度(罗马)，渊月螺旋/剧诗→星数，其余→进行中
+   */
+  buildGsActivities(cal) {
+    if (!cal || typeof cal !== 'object') return [];
+    const roman = (n) => (['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][n] || String(n));
+    const days = (sec) => {
+      const s = Number(sec) || 0;
+      if (s <= 0) return '';
+      const d = Math.floor(s / 86400);
+      if (d >= 1) return `剩余${d}天`;
+      const h = Math.floor(s / 3600);
+      return h >= 1 ? `剩余${h}小时` : '即将结束';
+    };
+
+    const parse = (it, isFixed) => {
+      if (!it) return null;
+      const title = String(it.name ?? '').trim();
+      if (!title) return null;
+      const status = Number(it.status) || 0;
+      const cd = Number(it.countdown_seconds) || 0;
+      // 未开始且无排期（如地脉移涌 start=0）跳过
+      if (status === 1 && cd <= 0) return null;
+      // 限时活动已结束就不显示；固定活动（渊月螺旋/剧诗）即使完成也保留进度
+      if (!isFixed && it.is_finished === true) return null;
+
+      let countdown = '';
+      let urgent = false;
+      if (status === 1) {
+        countdown = days(cd).replace('剩余', '') + '后开启';
+      } else {
+        countdown = days(cd);
+        const d = Math.floor(cd / 86400);
+        urgent = cd > 0 && d <= 1;
+      }
+
+      // 进度列按类型
+      let progress = '';
+      if (it.type === 'ActTypeHardChallenge' && it.hard_challenge_detail?.is_unlock) {
+        progress = `难度${roman(Number(it.hard_challenge_detail.difficulty) || 0)}`;
+      } else if (it.type === 'ActTypeTower' && it.tower_detail?.has_data) {
+        progress = `${it.tower_detail.total_star ?? 0}/${it.tower_detail.max_star ?? 0}`;
+      } else if (it.type === 'ActTypeRoleCombat' && it.role_combat_detail?.has_data) {
+        // 返回只有 max_round_id（已通关到第几幕），无可靠总幕数，不编造分母
+        const r = Number(it.role_combat_detail.max_round_id) || 0;
+        progress = r > 0 ? `第${r}幕` : '进行中';
+      } else if (status === 2) {
+        progress = '进行中';
+      } else if (status === 1) {
+        progress = '未开启';
+      }
+
+      return { title, progress, countdown, urgent, _status: status, _cd: cd };
+    };
+
+    const out = [];
+    const seen = new Set();
+    // 限时活动在前，固定活动（渊月螺旋/剧诗）在后
+    const tagged = [
+      ...(Array.isArray(cal.act_list) ? cal.act_list.map((it) => [it, false]) : []),
+      ...(Array.isArray(cal.fixed_act_list) ? cal.fixed_act_list.map((it) => [it, true]) : []),
+    ];
+    for (const [it, isFixed] of tagged) {
+      const a = parse(it, isFixed);
+      if (!a) continue;
+      if (seen.has(a.title)) continue;
+      seen.add(a.title);
+      out.push(a);
+    }
+    // 进行中优先，其次按剩余时间升序
+    out.sort((a, b) => {
+      if ((a._status === 2) !== (b._status === 2)) return a._status === 2 ? -1 : 1;
+      return (a._cd || Infinity) - (b._cd || Infinity);
+    });
+    return out.map(({ title, progress, countdown, urgent }) => ({ title, progress, countdown, urgent }));
+  }
+
+  // 单个 gs/sr/zzz UID → 一张立绘卡 segment
+  async renderPortraitCard(e, game, item, displayInfo, renderScale) {
+    const d = await this.buildStaminaData(game, item, displayInfo);
 
     const ppath = '../../../../../plugins/xhh-TL/resources/';
     const tplFile = pluginDir + '/resources/Tl/Portrait.html';
@@ -795,6 +1033,45 @@ export class TL extends plugin {
           ppath,
           tplFile,
           saveId: `Portrait_${game}`,
+        };
+      },
+    });
+    const image = extractRenderBuffer(renderResult);
+    return image ? segment.image(image) : null;
+  }
+
+  // 单个 gs/sr/zzz UID → 一张桌面小组件卡 segment
+  async renderWidgetCard(e, game, item, displayInfo, renderScale) {
+    const d = await this.buildStaminaData(game, item, displayInfo);
+
+    // 小组件竖卡：仅取 bars[0] 作主资源大数字（中间列表框已按需求移除）
+    const [primary] = d.bars || [];
+    d.primary = primary || null;
+
+    // 限时活动区块：数据来自 widget 接口自带字段（buildStaminaData 已解析进 d.acts）
+    // 与官方桌面小组件同源，零额外请求；可关，为空则模板自动不显示
+    if (config().tl_widget_activity === false) {
+      d.acts = [];
+    } else {
+      const limit = Number(config().tl_widget_activity_limit) || 4;
+      d.acts = (d.acts || []).slice(0, limit);
+    }
+
+    const ppath = '../../../../../plugins/xhh-TL/resources/';
+    const tplFile = pluginDir + '/resources/Tl/Widget.html';
+    const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
+
+    const renderResult = await e.runtime.render('小花火', 'Tl/Widget', renderData, {
+      retType: 'base64',
+      imgType: 'png',
+      beforeRender({ data }) {
+        return {
+          imgType: 'png',
+          sys: { scale: renderScale },
+          ...renderData,
+          ppath,
+          tplFile,
+          saveId: `Widget_${game}`,
         };
       },
     });
@@ -884,6 +1161,23 @@ export class TL extends plugin {
       time: time == 0 ? '已满' : getTime(time),
       ...res.data,
     };
+
+    // 原神活动日历：widget 接口不返回活动，用 cookie 额外拉 act_calendar（需完整 CK；失败静默不阻塞体力主流程）
+    if (game === 'gs' && config().tl_widget_activity !== false) {
+      try {
+        const mys = await prepareMysContext(e, 'gs');
+        const api = await mys?.runtime?.getMysApi?.('all', { game: 'gs' });
+        if (api) {
+          const acRes = await api.getData('act_calendar');
+          if (acRes?.retcode === 0 && acRes.data) {
+            data.act_calendar = acRes.data;
+          }
+        }
+      } catch (err) {
+        logger.debug?.(`[xhh-TL][act_calendar] ${err?.message}`);
+      }
+    }
+
     return data;
   }
 
