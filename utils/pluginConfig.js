@@ -9,7 +9,7 @@
 
 import fs from 'fs'
 import path from 'path'
-import { pathToFileURL } from 'url'
+import { pathToFileURL, fileURLToPath } from 'url'
 import YAML from 'yaml'
 
 const pluginDir = path.join(process.cwd(), 'plugins/xhh-TL')
@@ -199,6 +199,117 @@ export function toFileUrl(filePath) {
     if (/^[A-Za-z]:\//.test(normalized)) return `file:///${normalized}`
     if (normalized.startsWith('/')) return `file://${normalized}`
     return `file:///${normalized}`
+  }
+}
+
+/** 常见图片扩展名 → MIME */
+const IMG_MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+}
+
+/**
+ * 本地图片 → base64 data URI（内联进 HTML）
+ * 用于 CSS background-image：file:// 背景图不阻塞 puppeteer 截图，
+ * 偶发会截到背景尚未解码完成的一帧；内联 data URI 后像素随 HTML 一起到位，消除该竞态。
+ * 入参支持 file URL 或本地路径；失败或非本地文件时原样返回入参。
+ * @param {string} input file URL / 本地路径
+ * @returns {string} data URI 或原始入参
+ */
+export function toDataUrl(input) {
+  if (!input) return ''
+  const raw = String(input)
+  // 已是 data URI 直接返回
+  if (raw.startsWith('data:')) return raw
+  let abs = raw
+  if (raw.startsWith('file://')) {
+    try {
+      abs = fileURLToPath(raw)
+    } catch (_) {
+      return raw
+    }
+  } else if (/^https?:\/\//i.test(raw)) {
+    // 远程图不内联
+    return raw
+  } else {
+    abs = resolvePluginPath(raw)
+  }
+  try {
+    if (!abs || !fs.existsSync(abs)) return raw
+    const mime = IMG_MIME[path.extname(abs).toLowerCase()] || 'image/png'
+    const b64 = fs.readFileSync(abs).toString('base64')
+    return `data:${mime};base64,${b64}`
+  } catch (_) {
+    return raw
+  }
+}
+
+/** sharp 实例缓存（动态导入，避免可选依赖缺失时报错） */
+let _sharpMod
+async function loadSharp() {
+  if (_sharpMod !== undefined) return _sharpMod
+  try {
+    _sharpMod = (await import('sharp')).default
+  } catch (_) {
+    _sharpMod = null
+  }
+  return _sharpMod
+}
+
+/** 裁剪结果缓存：key = 绝对路径 + mtime，value = data URI */
+const _trimCache = new Map()
+
+/**
+ * 本地图片 → 裁掉四周透明边后的 base64 data URI（内联进 HTML）
+ * 用途：部分立绘是抠图素材，左右/上下留有透明边，铺进横幅时透明处会露出底色，
+ * 且角色会偏离视觉中心。先用 sharp 去掉透明边，图片变实心后 CSS `cover` 即可铺满并居中。
+ * 仅裁剪“完全透明”的边（指定透明背景），不透明图不受影响；sharp 不可用或失败时回退 toDataUrl。
+ * @param {string} input file URL / 本地路径
+ * @returns {Promise<string>} data URI 或原始入参
+ */
+export async function toDataUrlTrim(input) {
+  if (!input) return ''
+  const raw = String(input)
+  if (raw.startsWith('data:')) return raw
+  if (/^https?:\/\//i.test(raw)) return raw
+
+  let abs = raw
+  if (raw.startsWith('file://')) {
+    try {
+      abs = fileURLToPath(raw)
+    } catch (_) {
+      return toDataUrl(raw)
+    }
+  } else {
+    abs = resolvePluginPath(raw)
+  }
+  if (!abs || !fs.existsSync(abs)) return toDataUrl(raw)
+
+  const sharp = await loadSharp()
+  if (!sharp) return toDataUrl(abs)
+
+  try {
+    const mtime = fs.statSync(abs).mtimeMs
+    const key = `${abs}:${mtime}`
+    const cached = _trimCache.get(key)
+    if (cached) return cached
+
+    const buf = await sharp(abs)
+      // 仅裁剪与“全透明”匹配的边，不透明图无匹配边 → 原样保留
+      .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 10 })
+      .webp({ quality: 90 })
+      .toBuffer()
+    const uri = `data:image/webp;base64,${buf.toString('base64')}`
+    _trimCache.set(key, uri)
+    return uri
+  } catch (_) {
+    // 裁剪失败（如整图透明导致空结果）回退原图内联
+    return toDataUrl(abs)
   }
 }
 

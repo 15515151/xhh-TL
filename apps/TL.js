@@ -7,7 +7,7 @@ import plugin from '../../../lib/plugins/plugin.js';
 import { createUser } from '../utils/userBind.js';
 import { getstoken } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
-import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg } from '../utils/pluginConfig.js';
+import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { extractRenderBuffer } from '../utils/renderImage.js';
 import { replyQuote, replyForward } from '../utils/replyHelper.js';
 import { prepareMysContext } from '../utils/runtimePatch.js';
@@ -1047,6 +1047,10 @@ export class TL extends plugin {
     // 小组件竖卡：仅取 bars[0] 作主资源大数字（中间列表框已按需求移除）
     const [primary] = d.bars || [];
     d.primary = primary || null;
+
+    // 顶部横幅立绘内联为 data URI：CSS background-image 加载 file:// 不阻塞截图，
+    // 偶发会截到背景尚未解码的一帧（渐变底色露出）；内联后像素随 HTML 到位，消除该竞态。
+    if (d.portrait) d.portrait = await toDataUrlTrim(d.portrait);
 
     // 限时活动区块：数据来自 widget 接口自带字段（buildStaminaData 已解析进 d.acts）
     // 与官方桌面小组件同源，零额外请求；可关，为空则模板自动不显示

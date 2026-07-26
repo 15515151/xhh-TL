@@ -55,6 +55,15 @@ body {
   background: var(--banner);
   overflow: hidden;
 }
+.wg-banner-fill {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  filter: blur(28px) saturate(1.1);
+  transform: scale(1.25);
+}
 .wg-banner-portrait {
   position: absolute;
   inset: 0;
