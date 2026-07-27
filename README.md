@@ -60,6 +60,17 @@
 - **主题**：`gs_all_abyss_theme` — `light` 浅色白玻璃 / `dark` 深色半透明（锅巴「全部深渊主题」）
 - 查询时会提示「正在获取…」，约 30 秒后自动撤回；结果图引用触发消息
 
+### 原神深渊配队建议
+- 指令：`#深渊配队` / `#深渊组队` / `#深渊配对`
+- 数据源：[提瓦特小助手](https://api.yshelper.com)（用户自主上传的深境螺旋挑战统计）
+- 算法沿用 miao-plugin：把高频的上半 / 下半半队两两拼成完整 **4+4 双队**，去重后取每层 Top4
+- **绑定 CK 更准**：按本人练度（等级 / 武器 / 天赋）重排，并把**未持有角色灰显**；未绑定则出通用热度榜
+- 支持 `@某人`：用被 @ 的人的账号练度来推荐
+- 说明：数据源仅统计 **12 层满星**记录，故只出 12 层配队（11 层无独立榜）
+- 体力毛玻璃风格；背景与剧诗共用 `role_combat_bg_folder`
+- 开关：`abyss_team: true`（锅巴可配）
+- **主题**：`abyss_team_theme` — `light` / `dark`，留空则跟随「全部深渊主题」（锅巴「深渊配队主题」）
+
 ### 原神幻想真境剧诗
 - **可用角色**：`#幻想剧诗` / `#幻想角色` / `#幻想202607` 等 — 当期限制元素、开幕/特邀/可用角色（Nanoka 数据）
 - **小剧诗 / 小幻想**：`#小剧诗` / `#小幻想` / `#小剧诗上期` / `#上期小幻想`
@@ -166,6 +177,11 @@ gs_all_abyss: true
 # 毛玻璃主题：light=浅色白玻璃 / dark=深色半透明（锅巴「全部深渊主题」）
 gs_all_abyss_theme: light
 
+# 原神深渊配队建议（提瓦特小助手数据 + 本人练度）
+abyss_team: true
+# 主题：light / dark，留空则跟随 gs_all_abyss_theme
+abyss_team_theme: ""
+
 # 体力阈值推送（阈值由用户在群里用指令各自设置，存 data/resin_push.json）
 resin_push_enable: true          # 是否启用体力阈值推送
 resin_push_cron: "*/10 * * * *"  # 检查频率 cron，默认每 10 分钟；不建议太频繁
@@ -180,7 +196,7 @@ stoken_paths: ""
 
 > 阈值本身由每个用户在群里用指令各自设置（存于 `data/resin_push.json`），锅巴/配置只控制全局开关与检查频率。
 
-也可在 **锅巴** 中配置：体力、体力阈值推送（开关 + 频率）、全部深渊（含浅色/深色主题）、剧诗开关与背景路径、**CK/SToken 路径**、`render_scale`。
+也可在 **锅巴** 中配置：体力、体力阈值推送（开关 + 频率）、全部深渊（含浅色/深色主题）、深渊配队（开关 + 主题 + 优先级）、剧诗开关与背景路径、**CK/SToken 路径**、`render_scale`。
 
 ## 文件说明
 
@@ -202,6 +218,8 @@ stoken_paths: ""
 - `apps/tmpCleaner.js` - data/tmp 定时清理
 - `apps/nanokaAbyss.js` - Nanoka 版本深渊/剧诗/星铁挑战查询
 - `apps/gsAllAbyss.js` - 原神全部深渊三合一
+- `apps/abyssTeam.js` - 原神深渊配队建议（提瓦特小助手数据 + 本人练度）
+- `utils/yshelperApi.js` - 提瓦特小助手深渊统计数据源封装（含 1 小时缓存）
 - `config/default_config.yaml` - 默认配置（随仓库更新）
 - `config/config.yaml` - 用户配置（本地，更新不覆盖）
 - `guoba.support.js` - 锅巴配置项
@@ -210,6 +228,7 @@ stoken_paths: ""
 - `resources/all-abyss.html` / `all-abyss-mobile.html` - 星铁全部深渊模板（角色/图标素材走 miao-plugin）
 - `resources/role_combat/` - 剧诗 / 小剧诗模板
 - `resources/gs_all_abyss/` - 原神全部深渊模板
+- `resources/abyss_team/` - 原神深渊配队模板
 - `resources/nanoka_abyss/` - Nanoka 深渊模板
 - `resources/stat/imgs/bg1.png` / `bg2.png` - 默认背景图
 

@@ -129,6 +129,11 @@ export function buildHelpGroups() {
           desc: '螺旋 + 危战 + 小剧诗 三列合一',
         },
         {
+          icon: 'gs-莫娜.webp',
+          title: '#深渊配队 #深渊组队',
+          desc: '12层满星热门双队；绑CK按练度排序',
+        },
+        {
           icon: 'gs-芙宁娜.webp',
           title: '#小剧诗 #小幻想',
           desc: '幻想真境剧诗关键关卡通关速览',

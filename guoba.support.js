@@ -234,6 +234,41 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
+          label: '深渊配队'
+        },
+        {
+          field: 'abyss_team',
+          label: '启用深渊配队',
+          bottomHelpMessage:
+            '是否启用 #深渊配队 / #深渊组队 / #深渊配对。数据来自提瓦特小助手，绑定 CK 后按本人练度排序并灰显未持有角色',
+          component: 'Switch'
+        },
+        {
+          field: 'abyss_team_theme',
+          label: '深渊配队主题',
+          bottomHelpMessage: '毛玻璃遮罩配色。浅色=白玻璃；深色=黑色半透明。留空则跟随「全部深渊主题」',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '跟随全部深渊', value: '' },
+              { label: '浅色', value: 'light' },
+              { label: '深色', value: 'dark' }
+            ]
+          }
+        },
+        {
+          field: 'abyss_team_priority',
+          label: '深渊配队优先级',
+          bottomHelpMessage: '插件优先级，数字越小越优先。默认 -98',
+          component: 'InputNumber',
+          componentProps: {
+            min: -9999,
+            max: 9999,
+            placeholder: '默认 -98'
+          }
+        },
+        {
+          component: 'Divider',
           label: '帮助图'
         },
         {

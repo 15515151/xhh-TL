@@ -47,6 +47,12 @@ gs_all_abyss: true
 # 原神全部深渊毛玻璃主题：light=初版浅色玻璃 / dark=深色半透明
 gs_all_abyss_theme: light
 
+# 原神深渊配队（#深渊配队）：提瓦特小助手数据 + 本人练度排序
+abyss_team: true
+# 深渊配队毛玻璃主题：留空跟随「全部深渊主题」/ light 浅色 / dark 深色
+abyss_team_theme: ""
+abyss_team_priority: -98
+
 # 帮助图背景（#小火花帮助）
 # 默认插件自带 bg2.png，Linux/Win 通用相对路径：
 #   plugins/xhh-TL/resources/stat/imgs/bg2.png

@@ -5,6 +5,7 @@ import { allAbyss } from './apps/allAbyssModule.js'
 import { role_combat } from './apps/role_combat.js'
 import { miniRoleCombat } from './apps/miniRoleCombat.js'
 import { gsAllAbyss } from './apps/gsAllAbyss.js'
+import { abyssTeam } from './apps/abyssTeam.js'
 import { TmpCleaner } from './apps/tmpCleaner.js'
 import { nanokaAbyss } from './apps/nanokaAbyss.js'
 import { help } from './apps/help.js'
@@ -18,6 +19,7 @@ export {
   role_combat,
   miniRoleCombat,
   gsAllAbyss,
+  abyssTeam,
   TmpCleaner,
   nanokaAbyss,
   help,
