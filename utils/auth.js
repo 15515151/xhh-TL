@@ -115,7 +115,7 @@ export async function stokenToCookie(entry) {
  * 为某 QQ + UID 选取可用 stoken / cookie（体力 widget 与 CK 兜底共用）
  * @returns {string|false}
  */
-export async function getstoken(qq, uid) {
+export async function getstoken(qq, uid, e = null) {
   // 存活账号判定：#删除ck 会把对应米游社账号(ltuid)从 Yunzai 绑定库 Users.ltuids 移除。
   // - bind.hasRow=false：该 QQ 没走 genshin 绑定体系（纯扫码 stoken 用户）→ 无从比对，保持旧行为，全部放行。
   // - bind.hasRow=true：只使用「属主账号(stuid/ltuid)仍在存活集合里」的 stoken；被删账号的 stoken 判死。
@@ -209,7 +209,7 @@ export async function getstoken(qq, uid) {
 
   // SQLite/redis 绑定 CK 兜底（与深渊同源）
   try {
-    const nu = await createUser(qq)
+    const nu = await createUser(qq, e)
     const entries = Object.entries(nu?.mysUsers || {})
     const aliveMys = entries.filter(([ltuid, m]) => {
       if (!m?.ck) return false

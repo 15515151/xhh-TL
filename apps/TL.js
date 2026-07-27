@@ -743,7 +743,7 @@ export class TL extends plugin {
           lines.push(`getstoken[${g}]: 无UID`);
           continue;
         }
-        const sk = await getstoken(qq, uid);
+        const sk = await getstoken(qq, uid, e);
         lines.push(
           `getstoken[${g}] uid:${uid} => ${sk ? '拿到' : 'false'}` +
             (sk
@@ -1239,7 +1239,7 @@ export class TL extends plugin {
       return '没有';
     }
 
-    let sk = await getstoken(qq, uid);
+    let sk = await getstoken(qq, uid, e);
 
     // getstoken 拿不到凭证时（该用户无扫码 stoken，且 SQLite 兜底被「存活账号」
     // gating 滤掉），退回到与「全部深渊」完全同一条 cookie 链路（resolveAuth 直接读
