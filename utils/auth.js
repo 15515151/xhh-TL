@@ -178,6 +178,20 @@ export async function getstoken(qq, uid) {
       if (aliveEntry(entry)) candidates.push(entry)
     }
     if (!candidates.length) return false
+
+    // 按属主精确匹配：精确 UID 条目自身可能没存 stoken（私库/扫码常把 stoken
+    // 只挂在属主账号那条上，UID 条目只留 uid/region/stuid），但通常带 stuid 指向
+    // 它属于哪个米游社账号。据此在候选里找「同一 stuid、且带 stoken」的条目返回。
+    // 原神体力 widget 接口不带 uid、只认 stoken 所属账号，故必须精确到属主，
+    // 不能在多账号时乱挑一个（否则会把别的账号体力冒充成本 UID）。
+    // 置于 !bind.hasRow 兜底之前：无 genshin 时同样按属主精确命中，避免任取
+    // candidates[0] 把别的账号体力冒充成本 UID。
+    const ownerSid = entrySid(exact)
+    if (ownerSid) {
+      const owned = candidates.find((c) => entrySid(c) === ownerSid)
+      if (owned) return owned
+    }
+
     if (!bind.hasRow) return candidates[0]
 
     const sids = [...new Set(candidates.map(entrySid).filter(Boolean))]
