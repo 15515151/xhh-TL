@@ -11,6 +11,7 @@ import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPort
 import { extractRenderBuffer } from '../utils/renderImage.js';
 import { replyQuote, replyForward } from '../utils/replyHelper.js';
 import { prepareMysContext } from '../utils/runtimePatch.js';
+import LiteMysApi from '../utils/mysClient.js';
 
 // ============ 用户 UID 显示设置 ============
 async function getShowUid(qq) {
@@ -1124,18 +1125,37 @@ export class TL extends plugin {
         e.reply('UID:' + uid + '未绑定米游社SToken，请[扫码绑定]米游社~', true);
       return '没有';
     }
+    // sk 可能是纯 cookie：无扫码 stoken 的用户走 getstoken 的 SQLite 兜底，
+    // 只拿到 cookie_token/ltoken。体力 widget 接口靠 stoken 鉴权，纯 cookie 必被拒。
+    // 此时改走 cookie 版 dailyNote（与「全部深渊」同源，字段同名可直接复用后续流程）。
+    const hasStoken = /stoken=/.test(sk);
+    const canCookieFallback =
+      /cookie_token=|ltoken=|account_id=/.test(sk) && game !== 'zzz';
+
     let headers = getHeaders(e, sk, false);
-    let url =
-      game == 'gs' ? this.gsUrl : game == 'sr' ? this.srUrl : this.zzzUrl;
-    // ZZZ API 需要特定 game_biz header
-    if (game === 'zzz') {
-      headers['x-rpc-game_biz'] = 'nap_cn';
-      headers['x-rpc-signgame'] = 'zzz';
+    let res;
+    if (!hasStoken && canCookieFallback) {
+      // 纯 cookie：直接走 dailyNote，不浪费一次注定失败的 widget 请求
+      res = await this.noteViaCookie(e, game, sk, uid);
+    } else {
+      let url =
+        game == 'gs' ? this.gsUrl : game == 'sr' ? this.srUrl : this.zzzUrl;
+      // ZZZ API 需要特定 game_biz header
+      if (game === 'zzz') {
+        headers['x-rpc-game_biz'] = 'nap_cn';
+        headers['x-rpc-signgame'] = 'zzz';
+      }
+      res = await fetch(url, {
+        method: 'get',
+        headers,
+      }).then(res => res.json());
+      // stoken 过期但同串仍带 cookie（gs/sr）→ 兜底 dailyNote
+      if ([-10001, 10001, -100].includes(res?.retcode) && canCookieFallback) {
+        const fb = await this.noteViaCookie(e, game, sk, uid);
+        if (fb) res = fb;
+      }
     }
-    let res = await fetch(url, {
-      method: 'get',
-      headers,
-    }).then(res => res.json());
+
     if ([-10001, 10001, -100].includes(res?.retcode)) {
       if (!san) {
         e.reply('登录验证过期。请重新：扫码绑定 ');
@@ -1199,6 +1219,30 @@ export class TL extends plugin {
       }
     });
     return data;
+  }
+
+  /**
+   * 纯 cookie 用户（无扫码 stoken）的体力兜底：走 cookie 版 dailyNote，
+   * 与「全部深渊」同源（LiteMysApi）。gs/sr 的 dailyNote 字段与 widget 接口同名，
+   * 归一成 { retcode, data } 后可直接接回 note() 后续流程，渲染层零改动。
+   * zzz 的 note 结构差异大且官方另有 widget 专用接口，这里不兜底（上层已排除）。
+   * @returns {object|false} 形如 widget 的响应；失败返回 false
+   */
+  async noteViaCookie(e, game, cookie, uid) {
+    try {
+      const api = new LiteMysApi(uid, cookie, { game, log: false });
+      const res = await api.getData('dailyNote');
+      if (!res || res.retcode !== 0 || !res.data) return res || false;
+      // gs/sr 的 dailyNote 字段与 widget 完全同名（gs: current_resin/max_resin/
+      // resin_recovery_time/expeditions…；sr: current_stamina/max_stamina/
+      // stamina_recover_time/current_train_score/current_rogue_score/expeditions…），
+      // 直接透传即可接回 note() 后续流程。level 由 getGameDate 补齐，
+      // gs 缺 week_active_progress 时 buildStaminaData 自动回退到每日委托。
+      return res;
+    } catch (err) {
+      logger.debug?.(`[xhh-TL][noteViaCookie][${game}] ${err?.message}`);
+      return false;
+    }
   }
 
 }
