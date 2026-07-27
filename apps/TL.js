@@ -10,7 +10,7 @@ import common from '../../../lib/common/common.js';
 import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { extractRenderBuffer } from '../utils/renderImage.js';
 import { replyQuote, replyForward } from '../utils/replyHelper.js';
-import { prepareMysContext } from '../utils/runtimePatch.js';
+import { prepareMysContext, resolveAuth } from '../utils/runtimePatch.js';
 import LiteMysApi from '../utils/mysClient.js';
 
 // ============ 用户 UID 显示设置 ============
@@ -1120,6 +1120,25 @@ export class TL extends plugin {
     }
 
     let sk = await getstoken(qq, uid);
+
+    // getstoken 拿不到凭证时（该用户无扫码 stoken，且 SQLite 兜底被「存活账号」
+    // gating 滤掉），退回到与「全部深渊」完全同一条 cookie 链路（resolveAuth 直接读
+    // mysUsers[].ck，不做 gating）。gs/sr 走 cookie 版 dailyNote 即可查体力。
+    if (!sk && game !== 'zzz') {
+      try {
+        const auth = await resolveAuth(e, { needCookie: true, game });
+        if (auth?.ck) {
+          const res0 = await this.noteViaCookie(e, game, auth.ck, uid);
+          if (res0 && res0.retcode === 0) {
+            sk = auth.ck; // 供下方 getGameDate 复用（cookie 版 GameRoles 可用）
+            return await this.finishNote(e, game, res0, uid, getHeaders(e, sk, false));
+          }
+        }
+      } catch (err) {
+        logger.debug?.(`[xhh-TL][note][resolveAuth 兜底] ${err?.message}`);
+      }
+    }
+
     if (!sk) {
       if (!san)
         e.reply('UID:' + uid + '未绑定米游社SToken，请[扫码绑定]米游社~', true);
@@ -1163,6 +1182,15 @@ export class TL extends plugin {
       return '过期';
     }
 
+    return await this.finishNote(e, game, res, uid, headers);
+  }
+
+  /**
+   * note() 拿到有效 res（retcode 0）后的公共收尾：算恢复时间、补等级、
+   * 判派遣完成、拉原神活动日历，归一成渲染层需要的 data。widget 与 cookie
+   * 兜底两条路径共用，字段同名故无需分支。
+   */
+  async finishNote(e, game, res, uid, headers) {
     if (!res || res.retcode !== 0) {
       logger.error(res);
       return false;
