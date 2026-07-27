@@ -234,13 +234,35 @@ export async function getstoken(qq, uid, e = null) {
       usable = aliveMys
     }
 
-    const cks = usable.map(([, m]) => m.ck).filter(Boolean)
-    if (cks.length) {
-      return (
-        cks.find((ck) => /cookie_token=/.test(ck)) ||
-        cks.find((ck) => /ltoken=/.test(ck)) ||
-        cks[0]
-      )
+    // 选中账号可能把 stoken 单独存在字段里，没拼进 m.ck（诊断证实：账号 stoken:Y，
+    // 但兜底返回的 ck stoken:N）。体力 widget 接口靠 stoken 走稳定路径，纯 cookie_token
+    // 会过期导致「时好时坏」。这里把账号自带的 stoken/mid/stuid 补回 cookie 串，
+    // 让 note() 走 stoken widget。typeof 守卫：非字符串一律不动，维持原样零回归。
+    const withStoken = (ltuid, m) => {
+      let ck = m.ck || ''
+      const st = m.stoken
+      if (!/stoken=/.test(ck) && typeof st === 'string' && st) {
+        const stuid =
+          m.stuid ||
+          cookiePart(ck, 'account_id') ||
+          cookiePart(ck, 'ltuid') ||
+          String(ltuid || '')
+        let add = `stoken=${st};`
+        if (stuid) add += `stuid=${stuid};`
+        if (typeof m.mid === 'string' && m.mid) add += `mid=${m.mid};`
+        ck = ck ? `${ck.replace(/;?\s*$/, '')};${add}` : add
+      }
+      return ck
+    }
+
+    // 优先带 cookie_token 的账号，其次 ltoken，再次任意；选定后补回 stoken
+    const pick =
+      usable.find(([, m]) => /cookie_token=/.test(m.ck || '')) ||
+      usable.find(([, m]) => /ltoken=/.test(m.ck || '')) ||
+      usable[0]
+    if (pick) {
+      const ck = withStoken(pick[0], pick[1])
+      if (ck) return ck
     }
   } catch (err) {
     logger?.debug?.(`[xhh-TL][getstoken] SQLite 兜底失败: ${err?.message}`)

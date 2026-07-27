@@ -686,8 +686,12 @@ export class TL extends plugin {
         const m = mys[lt] || {};
         const ck = m.ck || '';
         lines.push(
-          `  账号${mask(lt)} ck:${ck ? '有' : '无'}` +
-            ` stoken:${has(ck, 'stoken') || m.stoken ? 'Y' : 'N'}` +
+          `  账号${mask(lt)} 字段:{${Object.keys(m).join(',')}}` +
+            ` ck:${ck ? '有' : '无'}` +
+            ` ck含stoken:${has(ck, 'stoken') ? 'Y' : 'N'}` +
+            ` m.stoken:${typeof m.stoken}${m.stoken ? '(有值)' : ''}` +
+            ` m.mid:${typeof m.mid}` +
+            ` m.stuid:${m.stuid ?? '无'}` +
             ` cookie_token:${has(ck, 'cookie_token') ? 'Y' : 'N'}` +
             ` ltoken:${has(ck, 'ltoken') ? 'Y' : 'N'}` +
             ` uids:${JSON.stringify(m.uids || {})}`,
