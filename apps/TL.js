@@ -1,6 +1,4 @@
 import { exec } from 'child_process';
-import fs from 'fs';
-import YAML from 'yaml';
 import fetch from 'node-fetch';
 import moment from 'moment';
 import md5 from 'md5';
@@ -9,7 +7,7 @@ import plugin from '../../../lib/plugins/plugin.js';
 import { createUser } from '../utils/userBind.js';
 import { getstoken } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
-import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim, getStokenCandidateFiles } from '../utils/pluginConfig.js';
+import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { extractRenderBuffer } from '../utils/renderImage.js';
 import { replyQuote, replyForward } from '../utils/replyHelper.js';
 import { prepareMysContext, resolveAuth } from '../utils/runtimePatch.js';
@@ -220,10 +218,6 @@ export class TL extends plugin {
         {
           reg: '^\\s*#?(?:体力插件|小花火体力)(?:强制)?更新\\s*$',
           fnc: 'updatePlugin',
-        },
-        {
-          reg: '^\\s*#?体力(?:凭证|绑定)?诊断\\s*$',
-          fnc: 'diagCredential',
         },
         {
           reg: '^\\s*#?(?:开启|打开)体力uid\\s*$',
@@ -649,124 +643,6 @@ export class TL extends plugin {
       }
     } catch (errLog) {
       logger.error(`[xhh-TL] 获取更新日志失败: ${errLog?.message || errLog}`);
-    }
-    return true;
-  }
-
-  /**
-   * 只读诊断：把该 QQ 的凭证存储结构（字段名 + 是否存在，token 值一律不输出）
-   * 回复出来，用于定位「原神体力取不到 stoken」的真实数据结构。
-   * 不落任何 token 值，只显示 key、字段名、布尔标记与前缀掩码。
-   */
-  async diagCredential(e) {
-    const qq = e.user_id;
-    const lines = [`[体力诊断] QQ:${qq}`];
-
-    // token 值一律脱敏：只保留字段是否存在与前 2 位
-    const mask = (v) => {
-      if (v == null || v === '') return '空';
-      const s = String(v);
-      return `有(${s.length}位,前2:${s.slice(0, 2)}…)`;
-    };
-    // 从 ck 串里探测是否含某字段
-    const has = (ck, key) => new RegExp(`(?:^|;\\s*)${key}=`).test(String(ck || ''));
-
-    // 1) 各游戏识别到的 UID（走兼容层）
-    try {
-      const user = await createUser(qq, e);
-      for (const g of ['gs', 'sr', 'zzz']) {
-        const list = (user.getUidList?.(g) || []).map((x) => String(x.uid || x));
-        lines.push(`UID[${g}]: ${list.length ? list.join(',') : '无'}`);
-      }
-      // mysUsers（SQLite/兼容层聚合的账号）
-      const mys = user.mysUsers || {};
-      const ltuids = Object.keys(mys);
-      lines.push(`mysUsers账号数: ${ltuids.length}`);
-      for (const lt of ltuids) {
-        const m = mys[lt] || {};
-        const ck = m.ck || '';
-        lines.push(
-          `  账号${mask(lt)} 字段:{${Object.keys(m).join(',')}}` +
-            ` ck:${ck ? '有' : '无'}` +
-            ` ck含stoken:${has(ck, 'stoken') ? 'Y' : 'N'}` +
-            ` m.stoken:${typeof m.stoken}${m.stoken ? '(有值)' : ''}` +
-            ` m.mid:${typeof m.mid}` +
-            ` m.stuid:${m.stuid ?? '无'}` +
-            ` cookie_token:${has(ck, 'cookie_token') ? 'Y' : 'N'}` +
-            ` ltoken:${has(ck, 'ltoken') ? 'Y' : 'N'}` +
-            ` uids:${JSON.stringify(m.uids || {})}`,
-        );
-      }
-    } catch (err) {
-      lines.push(`createUser 失败: ${err?.message}`);
-    }
-
-    // 2) stoken yaml 原始结构（逐条目：key、字段名、stuid、是否带 stoken）
-    try {
-      const files = getStokenCandidateFiles(qq);
-      let found = false;
-      for (const file of files) {
-        if (!fs.existsSync(file)) continue;
-        found = true;
-        lines.push(`--- 文件: ${file.replace(process.cwd(), '.')} ---`);
-        let data = {};
-        try {
-          data = YAML.parse(fs.readFileSync(file, 'utf-8')) || {};
-        } catch (err) {
-          lines.push(`  解析失败: ${err?.message}`);
-          continue;
-        }
-        for (const [key, entry] of Object.entries(data)) {
-          if (!entry || typeof entry !== 'object') {
-            lines.push(`  [${key}] 非对象: ${typeof entry}`);
-            continue;
-          }
-          const fields = Object.keys(entry);
-          lines.push(
-            `  [${key}] 字段:{${fields.join(',')}}` +
-              ` stuid:${mask(entry.stuid)}` +
-              ` uid:${entry.uid ?? '无'}` +
-              ` region:${entry.region ?? '无'}` +
-              ` stoken:${entry.stoken ? 'Y' : 'N'}` +
-              ` ck_stoken含stoken:${has(entry.ck_stoken, 'stoken') ? 'Y' : 'N'}` +
-              ` mid:${entry.mid ? 'Y' : 'N'}`,
-          );
-        }
-      }
-      if (!found) lines.push('未找到任何 stoken yaml 候选文件');
-    } catch (err) {
-      lines.push(`读取 stoken yaml 失败: ${err?.message}`);
-    }
-
-    // 3) getstoken 对各游戏 UID 的实际返回（只报是否拿到 + 含哪些字段）
-    try {
-      const user = await createUser(qq, e);
-      for (const g of ['gs', 'sr']) {
-        const uid = user.getUid?.(g);
-        if (!uid) {
-          lines.push(`getstoken[${g}]: 无UID`);
-          continue;
-        }
-        const sk = await getstoken(qq, uid, e);
-        lines.push(
-          `getstoken[${g}] uid:${uid} => ${sk ? '拿到' : 'false'}` +
-            (sk
-              ? ` stoken:${has(sk, 'stoken') ? 'Y' : 'N'}` +
-                ` cookie_token:${has(sk, 'cookie_token') ? 'Y' : 'N'}` +
-                ` ltoken:${has(sk, 'ltoken') ? 'Y' : 'N'}`
-              : ''),
-        );
-      }
-    } catch (err) {
-      lines.push(`getstoken 探测失败: ${err?.message}`);
-    }
-
-    const out = lines.join('\n');
-    try {
-      const forwardMsg = await common.makeForwardMsg(e, ['体力凭证诊断（token 已脱敏）', out]);
-      await replyForward(e, forwardMsg);
-    } catch (_) {
-      e.reply(out, true);
     }
     return true;
   }
