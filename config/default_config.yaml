@@ -78,3 +78,16 @@ tmp_clean_max_age_hours: 24
 resin_push_enable: true
 # 检查频率（cron）。默认每 10 分钟一次；不建议太频繁以免触发米游社风控
 resin_push_cron: "*/10 * * * *"
+
+# ===== 米游社自动签到 =====
+# 用户 opt-in 订阅：发 #原神自动签到 后才纳入每日自动签（星铁/绝区零同理）
+# 签到走稳定 device_id + 真 device_fp，触发验证码概率低；仍可能偶发验证码而跳过
+# 手动：#原神签到 / #星铁签到 / #绝区零签到 立即签一次
+auto_sign_enable: true
+# 每日签到时间（cron）。默认 00:23，避开整点风控高峰；建议 0-6 点随机分钟
+auto_sign_cron: "23 0 * * *"
+# 手动签到撞验证码时的「外部打码服务」地址（内置过码，装了本插件即可删掉 GT-Manual）
+# ⚠️ 过码会把 uid+gt+challenge 发给该第三方服务（不含 cookie）；服务下线/限流则过码失效
+# 留空则撞码只提示、不自动过码。默认沿用 GT-Manual 的公益地址
+# 仅手动 #原神签到 等实时指令生效；定时自动签无人手划，撞码只跳过
+auto_sign_verify_addr: "https://GT.928100.xyz/GTest/register?key=免费开源项目-您如果是交易获得则是被骗-请及时退款并举报"

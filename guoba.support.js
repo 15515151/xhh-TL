@@ -391,6 +391,37 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
+          label: '米游社自动签到'
+        },
+        {
+          field: 'auto_sign_enable',
+          label: '启用自动签到',
+          bottomHelpMessage:
+            '原神/星铁/绝区零 每日自动签到。用户 opt-in：发 #原神自动签到 后才纳入。指令：#原神签到（立即签）/ #原神自动签到（开启）/ #原神自动签到关闭 / #签到列表。走稳定 device_id + 真 device_fp，弹验证码概率低',
+          component: 'Switch'
+        },
+        {
+          field: 'auto_sign_cron',
+          label: '自动签到 cron',
+          bottomHelpMessage:
+            '标准 5 段 cron（分 时 日 月 周）。默认每天 0:23：23 0 * * *。避开整点风控高峰',
+          component: 'Input',
+          componentProps: {
+            placeholder: '23 0 * * *'
+          }
+        },
+        {
+          field: 'auto_sign_verify_addr',
+          label: '手动过码服务地址',
+          bottomHelpMessage:
+            '内置过码用的外部打码服务（等价 GT-Manual 的 verifyAddr）。手动 #原神签到 撞验证码时，会把 uid+gt+challenge（不含 cookie）发给它，返回链接@你手划滑块。默认沿用 GT-Manual 公益地址；留空则撞码不过码只提示。该服务非本插件提供，下线/限流则过码失效',
+          component: 'Input',
+          componentProps: {
+            placeholder: 'https://GT.928100.xyz/GTest/register?key=...'
+          }
+        },
+        {
+          component: 'Divider',
           label: '临时文件清理'
         },
         {

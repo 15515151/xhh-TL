@@ -119,6 +119,33 @@ export function buildHelpGroups() {
       ],
     },
     {
+      group: '米游社签到',
+      desc: '原神 / 星铁 / 绝区零 · 需绑定',
+      color: 'orange',
+      list: [
+        {
+          icon: 'gs-纳西妲.webp',
+          title: '#原神签到',
+          desc: '立即签到原神；星铁 #星铁签到、绝区零 #zzz签到',
+        },
+        {
+          icon: 'signin.webp',
+          title: '#原神自动签到',
+          desc: '开启每日自动签；星铁/绝区零同理，加「关闭」停用',
+        },
+        {
+          icon: 'mask.webp',
+          title: '#米游社验证 #过码',
+          desc: '主动过码清风险；可带游戏名，默认原神。撞码时也会自动触发',
+        },
+        {
+          icon: 'multi.webp',
+          title: '#签到列表',
+          desc: '查看自己已开启的自动签到订阅',
+        },
+      ],
+    },
+    {
       group: '原神 · 成绩汇总',
       desc: '个人通关 · 需绑定 Cookie',
       color: 'cyan',
