@@ -206,9 +206,9 @@ export function supportGuoba() {
         },
         {
           field: 'role_combat_bg_folder',
-          label: '剧诗/深渊背景',
+          label: '深渊/剧诗/配队背景',
           bottomHelpMessage:
-            '#幻想角色、#小剧诗、#全部深渊 共用。可填单张图片或角色面板目录。默认 plugins/xhh-TL/resources/stat/imgs/bg1.png（插件自带，Win/Linux 通用）。目录结构：子文件夹=角色名，内含图片随机抽取。也可用绝对路径',
+            '#幻想角色、#小剧诗、#全部深渊、#深渊配队、#危战配队、#角色持有率 共用同一张背景。可填单张图片或角色面板目录。默认 plugins/xhh-TL/resources/stat/imgs/bg1.png（插件自带，Win/Linux 通用）。目录结构：子文件夹=角色名，内含图片随机抽取。也可用绝对路径',
           component: 'Input',
           componentProps: {
             placeholder: 'plugins/xhh-TL/resources/stat/imgs/bg1.png'
@@ -259,6 +259,76 @@ export function supportGuoba() {
         {
           field: 'abyss_team_priority',
           label: '深渊配队优先级',
+          bottomHelpMessage: '插件优先级，数字越小越优先。默认 -98',
+          component: 'InputNumber',
+          componentProps: {
+            min: -9999,
+            max: 9999,
+            placeholder: '默认 -98'
+          }
+        },
+        {
+          component: 'Divider',
+          label: '危战配队'
+        },
+        {
+          field: 'hard_team',
+          label: '启用危战配队',
+          bottomHelpMessage:
+            '是否启用 #危战配队 / #危战组队 / #危战配对。数据来自提瓦特小助手幽境危战统计，绑定 CK 后按本人练度排序并灰显未持有角色',
+          component: 'Switch'
+        },
+        {
+          field: 'hard_team_theme',
+          label: '危战配队主题',
+          bottomHelpMessage: '毛玻璃遮罩配色。浅色=白玻璃；深色=黑色半透明。留空则跟随「全部深渊主题」',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '跟随全部深渊', value: '' },
+              { label: '浅色', value: 'light' },
+              { label: '深色', value: 'dark' }
+            ]
+          }
+        },
+        {
+          field: 'hard_team_priority',
+          label: '危战配队优先级',
+          bottomHelpMessage: '插件优先级，数字越小越优先。默认 -98',
+          component: 'InputNumber',
+          componentProps: {
+            min: -9999,
+            max: 9999,
+            placeholder: '默认 -98'
+          }
+        },
+        {
+          component: 'Divider',
+          label: '角色持有率'
+        },
+        {
+          field: 'hold_rate',
+          label: '启用角色持有率',
+          bottomHelpMessage:
+            '是否启用 #角色持有率 / #持有率。数据来自提瓦特小助手，为参与深渊统计玩家的角色持有比例。绑定 CK 后高亮你已持有的角色',
+          component: 'Switch'
+        },
+        {
+          field: 'hold_rate_theme',
+          label: '角色持有率主题',
+          bottomHelpMessage: '毛玻璃遮罩配色。浅色=白玻璃；深色=黑色半透明。留空则跟随「全部深渊主题」',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '跟随全部深渊', value: '' },
+              { label: '浅色', value: 'light' },
+              { label: '深色', value: 'dark' }
+            ]
+          }
+        },
+        {
+          field: 'hold_rate_priority',
+          label: '角色持有率优先级',
           bottomHelpMessage: '插件优先级，数字越小越优先。默认 -98',
           component: 'InputNumber',
           componentProps: {

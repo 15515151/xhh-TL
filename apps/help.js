@@ -134,6 +134,16 @@ export function buildHelpGroups() {
           desc: '12层满星热门双队；绑CK按练度排序',
         },
         {
+          icon: 'gs-胡桃.webp',
+          title: '#危战配队 #危战组队',
+          desc: '幽境危战上/中/下三关热门队；绑CK按练度排序',
+        },
+        {
+          icon: 'gs-刻晴.webp',
+          title: '#角色持有率 #持有率',
+          desc: '深渊玩家各角色持有比例；绑CK标记已持有',
+        },
+        {
           icon: 'gs-芙宁娜.webp',
           title: '#小剧诗 #小幻想',
           desc: '幻想真境剧诗关键关卡通关速览',

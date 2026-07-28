@@ -6,6 +6,8 @@ import { role_combat } from './apps/role_combat.js'
 import { miniRoleCombat } from './apps/miniRoleCombat.js'
 import { gsAllAbyss } from './apps/gsAllAbyss.js'
 import { abyssTeam } from './apps/abyssTeam.js'
+import { hardTeam } from './apps/hardTeam.js'
+import { holdRate } from './apps/holdRate.js'
 import { TmpCleaner } from './apps/tmpCleaner.js'
 import { nanokaAbyss } from './apps/nanokaAbyss.js'
 import { help } from './apps/help.js'
@@ -20,6 +22,8 @@ export {
   miniRoleCombat,
   gsAllAbyss,
   abyssTeam,
+  hardTeam,
+  holdRate,
   TmpCleaner,
   nanokaAbyss,
   help,
