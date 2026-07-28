@@ -5,16 +5,14 @@
  */
 
 import moment from 'moment'
-import path from 'path'
 import YAML from 'yaml'
 import lodash from 'lodash'
 import { Character, MysApi, Player } from '../../miao-plugin/models/index.js'
 import { prepareMysContext } from '../utils/runtimePatch.js'
-import { getRenderScaleStyle, pickRoleCombatBgImage, config, pluginDir, toFileUrl } from '../utils/pluginConfig.js'
+import { getRenderScaleStyle, config, pluginDir } from '../utils/pluginConfig.js'
 import { extractRenderBuffer } from '../utils/renderImage.js'
 import { replyProgress, replyQuote } from '../utils/replyHelper.js'
-
-const miaoRes = process.cwd() + '/plugins/miao-plugin/resources'
+import { faceUrl, pickGsBgImage } from '../utils/gsHelper.js'
 
 function intToRoman(num) {
   if (num < 1 || num > 3999) return String(num)
@@ -37,15 +35,6 @@ function isKeyRound(round) {
   return [3, 6, 8, 10].includes(id)
 }
 
-function faceUrl(face) {
-  if (!face) return ''
-  if (/^https?:\/\//i.test(face) || face.startsWith('file://') || face.startsWith('base64://')) {
-    return face
-  }
-  // miao 相对路径：/meta-gs/... 或 meta-gs/...
-  const rel = String(face).replace(/^[/\\]+/, '')
-  return toFileUrl(path.join(miaoRes, rel))
-}
 
 function resolveAvatarCard(avatar, avatarDataMap = {}) {
   const id = String(avatar.avatar_id || avatar.id || '')
@@ -179,22 +168,6 @@ function buildKeyStages(lvs, avatarDataMap) {
  * 只取原神角色子文件夹里的图片；过滤后为空则回退扫全部子目录
  * Windows 下自动处理盘符路径与 file:/// URL
  */
-function pickBgImage() {
-  const gsNames = new Set()
-  try {
-    Character.forEach(char => {
-      if (char?.game === 'gs' && char.name) gsNames.add(char.name)
-      return true
-    }, 'release', 'gs')
-  } catch (err) {
-    logger.debug?.('[xhh][miniRoleCombat] Character 列表失败，将扫描全部子目录:', err?.message)
-  }
-  return pickRoleCombatBgImage({
-    logTag: 'xhh-TL/miniRoleCombat',
-    filterDir: gsNames.size ? (name) => gsNames.has(name) : null,
-  })
-}
-
 function getVal(obj, pathStr) {
   return pathStr.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
 }
@@ -359,7 +332,7 @@ export class miniRoleCombat extends plugin {
     const difficulty = difficultyMap[stat.difficulty_id] || '未知'
     const totalTime = lvs.detail?.fight_statisic?.total_use_time ?? stat.total_use_time ?? '-'
 
-    const bgImage = pickBgImage()
+    const bgImage = pickGsBgImage('xhh-TL/miniRoleCombat')
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = targetName || e.sender?.card || e.sender?.nickname || String(qq)
 

@@ -14,15 +14,12 @@
 
 import moment from 'moment'
 import lodash from 'lodash'
-import path from 'path'
-import { Character, MysApi, Player } from '../../miao-plugin/models/index.js'
-import { prepareMysContext } from '../utils/runtimePatch.js'
-import { config, getRenderScaleStyle, pluginDir, toFileUrl, pickRoleCombatBgImage } from '../utils/pluginConfig.js'
+import { Character } from '../../miao-plugin/models/index.js'
+import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
 import { extractRenderBuffer } from '../utils/renderImage.js'
 import { replyProgress, replyQuote } from '../utils/replyHelper.js'
 import { getHardRank, pickTeamList, buildAvatarUrlNameMap } from '../utils/yshelperApi.js'
-
-const miaoRes = process.cwd() + '/plugins/miao-plugin/resources'
+import { resolveTargetQq, resolveDisplayName, faceUrl, pickGsBgImage, loadAvatarData } from '../utils/gsHelper.js'
 
 /** 三半区元数据：key 对应 combo 里的 xxx_use_num 字段 */
 const HALVES = [
@@ -30,59 +27,6 @@ const HALVES = [
   { key: 'mid', numKey: 'mid_use_num', label: '中半区', cls: 'mid' },
   { key: 'down', numKey: 'down_use_num', label: '下半区', cls: 'down' },
 ]
-
-/** 解析被 @ 的 QQ（排除 bot 自身） */
-function resolveTargetQq(e) {
-  const selfId = String(e.self_id || e.bot?.uin || (typeof Bot !== 'undefined' ? Bot.uin : '') || '')
-  if (e?.at && String(e.at) !== selfId) return String(e.at)
-  for (const msg of e?.message || []) {
-    if (msg?.type === 'at' && String(msg.qq) !== selfId) return String(msg.qq)
-  }
-  return ''
-}
-
-/** 取群昵称 / 名片 */
-async function resolveDisplayName(e, qq) {
-  const id = String(qq || '')
-  if (!id) return ''
-  let name = ''
-  try {
-    if (e.isGroup || e.group) {
-      const member = e.group?.pickMember?.(id) || e.group?.pickMember?.(Number(id))
-      if (member?.card || member?.nickname) name = member.card || member.nickname
-      if (!name) {
-        const bot = e.bot || (typeof Bot !== 'undefined' ? Bot : null)
-        let info = null
-        if (bot?.getGroupMemberInfo) {
-          info = await bot.getGroupMemberInfo(String(e.group_id), id)
-        } else if (bot?.sendApi) {
-          const res = await bot.sendApi('get_group_member_info', {
-            group_id: String(e.group_id),
-            user_id: id,
-          })
-          info = res?.data || res
-        }
-        if (info?.card || info?.nickname) name = info.card || info.nickname
-      }
-    }
-  } catch (_) {}
-  if (!name) {
-    const s = e.sender || {}
-    if (String(e.user_id) === id) {
-      name = (s.card && String(s.card).length < 20 ? s.card : '') || s.nickname || id
-    } else {
-      name = id
-    }
-  }
-  return String(name)
-}
-
-function faceUrl(face) {
-  if (!face) return ''
-  if (/^https?:\/\//i.test(face) || face.startsWith('file://') || face.startsWith('base64://')) return face
-  const rel = String(face).replace(/^[/\\]+/, '')
-  return toFileUrl(path.join(miaoRes, rel))
-}
 
 /**
  * 把危战配队数据整理成 { up:[{ids,rate}], mid:[...], down:[...] }
@@ -232,20 +176,6 @@ function buildSections(ret, avatarMap) {
   return sections
 }
 
-function pickBgImage() {
-  const gsNames = new Set()
-  try {
-    Character.forEach((char) => {
-      if (char?.game === 'gs' && char.name) gsNames.add(char.name)
-      return true
-    }, 'release', 'gs')
-  } catch (_) {}
-  return pickRoleCombatBgImage({
-    logTag: 'xhh-TL/hardTeam',
-    filterDir: gsNames.size ? (name) => gsNames.has(name) : null,
-  })
-}
-
 export class hardTeam extends plugin {
   constructor() {
     super({
@@ -282,29 +212,7 @@ export class hardTeam extends plugin {
     if (!halfData) return e.reply('暂无可用的危战配队数据，请稍后重试~')
 
     // 取本人练度（有 CK 更准；无 CK 用通用榜）
-    let avatarData = {}
-    let hasCk = false
-    try {
-      await prepareMysContext(e, 'gs')
-      const mys = await MysApi.init(e, 'cookie')
-      if (mys && (await mys.checkCk())) {
-        hasCk = true
-        const player = Player.create(e)
-        try {
-          await player.refresh({ detail: 1, talent: 1 })
-        } catch (_) {
-          try { await player.refreshTalent() } catch (_) {}
-        }
-        const raw = player.getAvatarData() || {}
-        if (Array.isArray(raw)) {
-          for (const a of raw) avatarData[String(a.id)] = a
-        } else {
-          for (const [k, v] of Object.entries(raw)) avatarData[String(k)] = v
-        }
-      }
-    } catch (err) {
-      logger.debug('[xhh][hardTeam] 练度获取跳过:', err?.message)
-    }
+    const { hasCk, avatarData } = await loadAvatarData(e, { talent: true, logTag: 'xhh][hardTeam' })
 
     const { ret, avatarMap } = computeHalves(halfData, avatarData)
     const sections = buildSections(ret, avatarMap)
@@ -314,7 +222,7 @@ export class hardTeam extends plugin {
 
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = await resolveDisplayName(e, qq)
-    const bgImage = pickBgImage()
+    const bgImage = pickGsBgImage('xhh-TL/hardTeam')
     const renderScale = getRenderScaleStyle(config(), 2.0)
     // 危战配队主题：留空则跟随全部深渊主题
     const cfg = config()

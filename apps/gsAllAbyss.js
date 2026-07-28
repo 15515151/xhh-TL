@@ -8,72 +8,17 @@
  */
 
 import moment from 'moment'
-import path from 'path'
 import YAML from 'yaml'
 import lodash from 'lodash'
 import { Character, MysApi, Player, HardChallenge } from '../../miao-plugin/models/index.js'
 import { prepareMysContext } from '../utils/runtimePatch.js'
-import { getRenderScaleStyle, pickRoleCombatBgImage, config, pluginDir, toFileUrl } from '../utils/pluginConfig.js'
+import { getRenderScaleStyle, config, pluginDir } from '../utils/pluginConfig.js'
 import { extractRenderBuffer } from '../utils/renderImage.js'
 import { replyProgress, replyQuote } from '../utils/replyHelper.js'
-
-const miaoRes = process.cwd() + '/plugins/miao-plugin/resources'
-
-/** 解析被 @ 的 QQ（排除 bot 自身） */
-function resolveTargetQq(e) {
-  const selfId = String(e.self_id || e.bot?.uin || (typeof Bot !== 'undefined' ? Bot.uin : '') || '')
-  if (e?.at && String(e.at) !== selfId) return String(e.at)
-  for (const msg of e?.message || []) {
-    if (msg?.type === 'at' && String(msg.qq) !== selfId) return String(msg.qq)
-  }
-  return ''
-}
-
-/** 取群昵称 / 名片 */
-async function resolveDisplayName(e, qq) {
-  const id = String(qq || '')
-  if (!id) return ''
-  let name = ''
-  try {
-    if (e.isGroup || e.group) {
-      const member = e.group?.pickMember?.(id) || e.group?.pickMember?.(Number(id))
-      if (member?.card || member?.nickname) name = member.card || member.nickname
-      if (!name) {
-        const bot = e.bot || (typeof Bot !== 'undefined' ? Bot : null)
-        let info = null
-        if (bot?.getGroupMemberInfo) {
-          info = await bot.getGroupMemberInfo(String(e.group_id), id)
-        } else if (bot?.sendApi) {
-          const res = await bot.sendApi('get_group_member_info', {
-            group_id: String(e.group_id),
-            user_id: id,
-          })
-          info = res?.data || res
-        }
-        if (info?.card || info?.nickname) name = info.card || info.nickname
-      }
-    }
-  } catch (_) {}
-  if (!name) {
-    const s = e.sender || {}
-    if (String(e.user_id) === id) {
-      name = (s.card && String(s.card).length < 20 ? s.card : '') || s.nickname || id
-    } else {
-      name = id
-    }
-  }
-  return String(name)
-}
+import { resolveTargetQq, resolveDisplayName, faceUrl, pickGsBgImage } from '../utils/gsHelper.js'
 
 function getVal(obj, pathStr) {
   return pathStr.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
-}
-
-function faceUrl(face) {
-  if (!face) return ''
-  if (/^https?:\/\//i.test(face) || face.startsWith('file://') || face.startsWith('base64://')) return face
-  const rel = String(face).replace(/^[/\\]+/, '')
-  return toFileUrl(path.join(miaoRes, rel))
 }
 
 /** 角色图：战绩条优先立绘/侧身，队伍卡用头像 */
@@ -219,20 +164,6 @@ function isKeyRound(round) {
   if (!round) return false
   if (round.is_tarot) return true
   return [3, 6, 8, 10].includes(Number(round.round_id))
-}
-
-function pickBgImage() {
-  const gsNames = new Set()
-  try {
-    Character.forEach(char => {
-      if (char?.game === 'gs' && char.name) gsNames.add(char.name)
-      return true
-    }, 'release', 'gs')
-  } catch (_) {}
-  return pickRoleCombatBgImage({
-    logTag: 'xhh-TL/gsAllAbyss',
-    filterDir: gsNames.size ? (name) => gsNames.has(name) : null,
-  })
 }
 
 /** 深境螺旋：图二布局（大卡 8 人 + 三间小头像），风格仍用体力卡片 */
@@ -733,7 +664,7 @@ export class gsAllAbyss extends plugin {
 
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = await resolveDisplayName(e, qq)
-    const bgImage = pickBgImage()
+    const bgImage = pickGsBgImage('xhh-TL/gsAllAbyss')
     const renderScale = getRenderScaleStyle(config(), 2.0)
     // 毛玻璃主题：light=初版浅色玻璃 / dark=深色半透明（锅巴可配）
     const themeRaw = String(config().gs_all_abyss_theme || 'light').toLowerCase()
