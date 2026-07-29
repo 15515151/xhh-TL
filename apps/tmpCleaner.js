@@ -22,12 +22,12 @@ function tmpDir() {
  */
 export function cleanTmpDir(opts = {}) {
   const dir = tmpDir()
-  const maxAgeHours = Number(opts.maxAgeHours)
   const forceAll = !!opts.forceAll
-  const ageMs =
-    forceAll || !Number.isFinite(maxAgeHours) || maxAgeHours <= 0
-      ? 0
-      : maxAgeHours * 3600 * 1000
+  // forceAll 才是「删全部」；普通清理时 maxAgeHours 为 0/非法应回退默认 24h，
+  // 而不是当作 0 龄→删光（配置误填 0 会清空整个 tmp，且文案显示“超过 0 小时”误导）
+  const rawHours = Number(opts.maxAgeHours)
+  const maxAgeHours = Number.isFinite(rawHours) && rawHours > 0 ? rawHours : DEFAULT_MAX_AGE_HOURS
+  const ageMs = forceAll ? 0 : maxAgeHours * 3600 * 1000
   const now = Date.now()
 
   let removed = 0
@@ -50,7 +50,7 @@ export function cleanTmpDir(opts = {}) {
       }
       if (!st.isFile()) continue
 
-      const expired = forceAll || ageMs === 0 || now - st.mtimeMs >= ageMs
+      const expired = forceAll || now - st.mtimeMs >= ageMs
       if (!expired) {
         kept++
         continue
@@ -128,13 +128,13 @@ export class TmpCleaner extends plugin {
   async manualClean(e) {
     const forceAll = /全部|强制|所有/.test(e.msg || '')
     const cfg = config()
-    const maxAgeHours = forceAll
-      ? 0
-      : Number(cfg.tmp_clean_max_age_hours ?? DEFAULT_MAX_AGE_HOURS)
-    const r = cleanTmpDir({ maxAgeHours, forceAll })
+    // 非强制时若配置为 0/非法，cleanTmpDir 会回退默认 24h；文案也用回退后的真实值，避免显示“超过 0 小时”
+    const rawHours = Number(cfg.tmp_clean_max_age_hours ?? DEFAULT_MAX_AGE_HOURS)
+    const effHours = Number.isFinite(rawHours) && rawHours > 0 ? rawHours : DEFAULT_MAX_AGE_HOURS
+    const r = cleanTmpDir({ maxAgeHours: forceAll ? 0 : effHours, forceAll })
     const tip = forceAll
       ? `已清空 tmp：删除 ${r.removed} 个文件，释放 ${formatBytes(r.freed)}`
-      : `已清理超过 ${maxAgeHours} 小时的临时文件：删除 ${r.removed} 个，保留 ${r.kept} 个，释放 ${formatBytes(r.freed)}`
+      : `已清理超过 ${effHours} 小时的临时文件：删除 ${r.removed} 个，保留 ${r.kept} 个，释放 ${formatBytes(r.freed)}`
     e.reply(tip, true)
     return true
   }

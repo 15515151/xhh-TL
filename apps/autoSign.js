@@ -247,16 +247,20 @@ export class autoSign extends plugin {
     if (this._disabled(e)) return true
     const label = GAME_LABEL[game]
 
-    // 校验：必须真能取到该游戏至少一个绑定 UID
+    // 校验：必须有「带 ck 属主(ltuid)」的 UID —— 与 signUserGame 的过滤完全一致，
+    // 否则会出现「订阅成功但 cron 全被过滤、永远不签、也不进汇总图」的静默失效
     let uidList = []
     try {
       const user = await createUser(e.user_id, e)
-      uidList = (user.getUidList(game) || []).map((x) => String(x.uid || x)).filter(Boolean)
+      uidList = (user.getUidList(game) || [])
+        .filter((x) => x && typeof x === 'object' && x.ltuid)
+        .map((x) => String(x.uid))
+        .filter(Boolean)
     } catch (err) {
       logger?.error?.(`[xhh-TL][自动签到] 枚举 UID 失败 ${e.user_id}: ${err.message}`)
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${label}账号，请先【扫码绑定】米游社后再开启自动签到~`, true)
+      e.reply(`你还没有绑定${label}账号（或名下 UID 均无有效 CK），请先【扫码绑定】米游社后再开启自动签到~`, true)
       return true
     }
 

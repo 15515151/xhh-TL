@@ -437,7 +437,10 @@ export class resinPush extends plugin {
     if (cfg.resin_push_enable === false) return
     const subs = loadSubs()
 
-    let changed = false
+    // 只收集本轮的 armed 翻转，末尾重新 loadSubs 做字段级合并写回，
+    // 避免长循环期间用户改订阅（关闭/改阈值，独立落盘）被旧快照整体覆盖。
+    // 直接订阅：{ key, qq, armed }；全 id：{ key, qq, uid, armed }
+    const armedChanges = []
     const scale = getRenderScaleStyle(cfg, 1.0)
     const tl = new TL()
 
@@ -456,7 +459,7 @@ export class resinPush extends plugin {
           if (cur < sub.threshold) {
             if (!sub.armed) {
               sub.armed = true
-              changed = true
+              armedChanges.push({ key: game, qq, armed: true })
             }
             continue
           }
@@ -466,7 +469,7 @@ export class resinPush extends plugin {
             const ok = await this.pushOne(tl, qq, game, sub, item, scale)
             if (ok) {
               sub.armed = false
-              changed = true
+              armedChanges.push({ key: game, qq, armed: false })
             }
           }
         } catch (err) {
@@ -492,7 +495,7 @@ export class resinPush extends plugin {
             if (cur < allSub.threshold) {
               if (!state.armed) {
                 state.armed = true
-                changed = true
+                armedChanges.push({ key: ALL_KEY(game), qq, uid, armed: true })
               }
               continue
             }
@@ -502,7 +505,7 @@ export class resinPush extends plugin {
               const ok = await this.pushOne(tl, qq, game, allSub, item, scale, uid)
               if (ok) {
                 state.armed = false
-                changed = true
+                armedChanges.push({ key: ALL_KEY(game), qq, uid, armed: false })
               }
             }
           } catch (err) {
@@ -512,7 +515,23 @@ export class resinPush extends plugin {
       }
     }
 
-    if (changed) saveSubs(subs)
+    // 写回前重新读盘做字段级合并：本轮长循环期间用户可能已改/删订阅（各自独立落盘），
+    // 只把本轮算出的 armed 变更合并进最新文件，且跳过已被删除的 key，避免旧快照整体覆写丢更新
+    if (armedChanges.length) {
+      const latest = loadSubs()
+      for (const c of armedChanges) {
+        if (c.uid) {
+          // 全 id 订阅：定位到 uids[uid].armed
+          const node = latest[c.key]?.[c.qq]
+          if (node?.uids?.[c.uid]) node.uids[c.uid].armed = c.armed
+        } else {
+          // 单 UID 订阅
+          const node = latest[c.key]?.[c.qq]
+          if (node) node.armed = c.armed
+        }
+      }
+      saveSubs(latest)
+    }
   }
 
   /** 用「假 e + Runtime」复用 TL.note 查询体力（主 UID） */

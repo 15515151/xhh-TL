@@ -93,12 +93,14 @@ async function resolveAuth(e, { needCookie = true, game = 'gs' } = {}) {
       (matchUid ? 1 : 0)
     prefer.push({ lt, mys, score, matchUid })
   }
+  // matchUid 已计入 score(+1)，且带 cookie_token/ltoken 权重更高，
+  // 排序后第一个可用候选即最优；命中即停，不能继续覆盖成后面的低分候选。
   prefer.sort((a, b) => b.score - a.score)
   for (const item of prefer) {
     if (item.score <= 0 && prefer.length > 1) continue
     ck = item.mys.ck
     ltuid = String(item.lt)
-    if (item.matchUid && /cookie_token|ltoken=/.test(ck)) break
+    break
   }
 
   // 2) 有 ltoken 但无 cookie_token 时，仍尝试用 stoken 换完整 ck

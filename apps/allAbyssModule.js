@@ -239,6 +239,9 @@ function matchTrailblazerId(playerAvatarIds, apiId) {
 // 全部深渊功能：混沌、虚构、末日、异相四合一
 export async function allAbyss(e) {
     try {
+      // 锅巴开关：关闭则不响应（与 gsAllAbyss/hardTeam/holdRate 一致）
+      if (config().all_abyss === false) return false;
+
       // 加载 miao-plugin 模块
       const loaded = await loadMiaoModules();
       if (!loaded || !MysApi || !Common) {

@@ -53,6 +53,18 @@ abyss_team: true
 abyss_team_theme: ""
 abyss_team_priority: -98
 
+# 幽境危战配队（#危战配队）：提瓦特小助手幽境危战统计 + 本人练度排序
+hard_team: true
+# 危战配队毛玻璃主题：留空跟随「全部深渊主题」/ light 浅色 / dark 深色
+hard_team_theme: ""
+hard_team_priority: -98
+
+# 角色持有率（#角色持有率）：提瓦特小助手深渊统计的角色持有比例
+hold_rate: true
+# 角色持有率毛玻璃主题：留空跟随「全部深渊主题」/ light 浅色 / dark 深色
+hold_rate_theme: ""
+hold_rate_priority: -98
+
 # 帮助图背景（#小火花帮助）
 # 默认插件自带 bg2.png，Linux/Win 通用相对路径：
 #   plugins/xhh-TL/resources/stat/imgs/bg2.png

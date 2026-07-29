@@ -234,11 +234,18 @@ export default class LiteMysApi {
   }
 
   async getData(type, data = {}, cached = false) {
-    if (!this._device_fp && !data?.Getfp && !data?.headers?.['x-rpc-device_fp']) {
-      this._device_fp = await this.getData('getFp', {
+    // getFp 只在「尚无有效指纹」且「不在失败冷却窗口内」时取一次：
+    // 旧写法失败会把 this._device_fp 置为 false，因 `!false` 为真 → 之后每个请求都重试 getFp、
+    // 且 this._device_fp?.data 恒 undefined 始终不带真指纹。改为拿到有效指纹才缓存，失败则冷却 60s。
+    const fpValid = !!this._device_fp?.data?.device_fp
+    const fpCooling = this._fpFailAt && Date.now() - this._fpFailAt < 60000
+    if (!fpValid && !fpCooling && !data?.Getfp && !data?.headers?.['x-rpc-device_fp']) {
+      const fp = await this.getData('getFp', {
         seed_id: crypto.randomUUID().replace(/-/g, '').slice(0, 16),
         Getfp: true,
       })
+      if (fp?.data?.device_fp) this._device_fp = fp
+      else this._fpFailAt = Date.now()
     }
     if (type === 'getFp' && !data?.Getfp) return this._device_fp
 

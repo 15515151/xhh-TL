@@ -76,11 +76,11 @@ export async function stokenToCookie(entry) {
     }
     const cookieRes = await fetch(
       `https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken?stoken=${encodeURIComponent(stoken)}&uid=${encodeURIComponent(stuid)}`,
-      { method: 'GET', headers },
+      { method: 'GET', headers, timeout: 12000 },
     ).then((r) => r.json())
     const ltokenRes = await fetch(
       'https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken',
-      { method: 'GET', headers: { ...headers, DS: makeAppDs() } },
+      { method: 'GET', headers: { ...headers, DS: makeAppDs() }, timeout: 12000 },
     ).then((r) => r.json())
 
     const cookieToken = cookieRes?.data?.cookie_token
@@ -204,7 +204,11 @@ export async function getstoken(qq, uid, e = null) {
     const data = readYaml(file)
     const entry = findInData(data)
     if (!entry) continue
-    return entry.ck_stoken || `stuid=${entry.stuid};stoken=${entry.stoken};mid=${entry.mid};`
+    if (entry.ck_stoken) return entry.ck_stoken
+    // 按字段存在性拼接，缺失字段不写入，避免产出 mid=undefined 被米游社判非法
+    let s = `stuid=${entry.stuid};stoken=${entry.stoken};`
+    if (entry.mid) s += `mid=${entry.mid};`
+    return s
   }
 
   // SQLite/redis 绑定 CK 兜底（与深渊同源）

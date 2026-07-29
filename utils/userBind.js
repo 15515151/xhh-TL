@@ -74,10 +74,9 @@ function classifyEntry(uid, entry = {}) {
     if (s.length <= 8) return 'zzz'
     return 'sr'
   }
-  // 无 region 时按 UID 位数猜测
-  const s = String(uid)
-  if (/^\d{9}$/.test(s) && s[0] === '1') return 'sr'
-  if (/^\d{8,10}$/.test(s) && s[0] === '1') return 'gs'
+  // 无 region 时无法可靠区分原神/星铁（两者 CN UID 都是 9 位、可 1 开头）。
+  // 原策略「9 位且首位 1 → sr」会把大量原神 CN UID 误判为星铁；
+  // 缺 region 时保守归 gs（原神基数最大，误判面最小），有 region 的走上面精确分支。
   return 'gs'
 }
 
