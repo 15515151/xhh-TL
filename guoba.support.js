@@ -411,6 +411,20 @@ export function supportGuoba() {
           }
         },
         {
+          field: 'auto_sign_theme',
+          label: '自动签到汇总图主题',
+          bottomHelpMessage:
+            '每日签到完成后发到群里的汇总图配色。浅色=白玻璃；深色=黑色半透明。留空则跟随「角色持有率主题 / 全部深渊主题」',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '跟随全部深渊', value: '' },
+              { label: '浅色', value: 'light' },
+              { label: '深色', value: 'dark' }
+            ]
+          }
+        },
+        {
           field: 'auto_sign_verify_addr',
           label: '手动过码服务地址',
           bottomHelpMessage:

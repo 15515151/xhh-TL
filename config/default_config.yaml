@@ -86,6 +86,8 @@ resin_push_cron: "*/10 * * * *"
 auto_sign_enable: true
 # 每日签到时间（cron）。默认 00:23，避开整点风控高峰；建议 0-6 点随机分钟
 auto_sign_cron: "23 0 * * *"
+# 签到完成汇总图毛玻璃主题：留空跟随「全部深渊主题」/ light 浅色 / dark 深色
+auto_sign_theme: ""
 # 手动签到撞验证码时的「外部打码服务」地址（内置过码，装了本插件即可删掉 GT-Manual）
 # ⚠️ 过码会把 uid+gt+challenge 发给该第三方服务（不含 cookie）；服务下线/限流则过码失效
 # 留空则撞码只提示、不自动过码。默认沿用 GT-Manual 的公益地址

@@ -3,10 +3,12 @@
  *
  * - 用户 opt-in 订阅：发 #原神自动签到 后才纳入每日自动签，仿体力推送的显式订阅
  * - 手动签到：#原神签到 / #星铁签到 / #绝区零签到 —— 立即签一次并回报结果
- * - 每日 cron 定时对所有订阅者的对应游戏全部绑定 UID 逐个签到
+ * - 每日 cron 定时按「订阅群」分组：一次性把该群所有订阅者、所有游戏签完，
+ *   汇总成一张统计图发到群里（不再逐用户 @ 回报）
+ * - 所有签到相关指令仅支持群内使用，私聊一律拒绝
  * - 签到走 utils/signClient.js（稳定 device_id + 真 device_fp），弹验证码概率低
  *
- * 指令：
+ * 指令（仅群内）：
  *   #原神签到 / #星铁签到 / #绝区零签到        立即签一次
  *   #原神自动签到 / #原神自动签到开启          开启每日自动签（星铁/绝区零同理）
  *   #原神自动签到关闭                          关闭
@@ -15,13 +17,16 @@
 
 import fs from 'fs'
 import path from 'path'
+import moment from 'moment'
 import plugin from '../../../lib/plugins/plugin.js'
+import Runtime from '../../../lib/plugins/runtime.js'
 import { createUser } from '../utils/userBind.js'
 import { resolveAuth } from '../utils/runtimePatch.js'
 import { signOne, GAME_LABEL } from '../utils/signClient.js'
 import { runBbsVerify } from '../utils/mysVerify.js'
 import LiteMysApi from '../utils/mysClient.js'
-import { config, pluginDir } from '../utils/pluginConfig.js'
+import { extractRenderBuffer } from '../utils/renderImage.js'
+import { config, pluginDir, getRenderScaleStyle, pickHelpBgImage, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
 
 const DATA_DIR = path.join(pluginDir, 'data')
 const CONFIG_FILE = path.join(DATA_DIR, 'auto_sign.json')
@@ -35,6 +40,13 @@ const GAME_ALIAS = {
   gs: '(?:原神|ys)',
   sr: '(?:星铁|崩铁|星穹铁道|xt)',
   zzz: '(?:绝区零|zzz)',
+}
+
+// 汇总图各游戏行图标（resources/help/icons 下的 logo）
+const GAME_ICON = {
+  gs: 'help/icons/gs-logo.webp',
+  sr: 'help/icons/sr-logo.webp',
+  zzz: 'help/icons/zzz.webp',
 }
 
 // ============ 配置读写 ============
@@ -123,12 +135,22 @@ export class autoSign extends plugin {
     return false
   }
 
+  // 签到相关指令一律不支持私聊：仅群内可用
+  _groupOnly(e) {
+    if (!e.isGroup) {
+      e.reply('签到相关功能仅支持在群内使用，请到群里发送该指令~', true)
+      return true
+    }
+    return false
+  }
+
   // -------- 立即签到 --------
   async signGs(e) { return this._signNow(e, 'gs') }
   async signSr(e) { return this._signNow(e, 'sr') }
   async signZzz(e) { return this._signNow(e, 'zzz') }
 
   async _signNow(e, game) {
+    if (this._groupOnly(e)) return true
     if (this._disabled(e)) return true
     const label = GAME_LABEL[game]
     const results = await this.signUserGame(e, e.user_id, game, e)
@@ -149,6 +171,7 @@ export class autoSign extends plugin {
   // 不必等撞码，用户可主动跑一次过码清掉该设备风险分，之后签到更顺。
   // 从消息里识别游戏（默认原神）；对该游戏名下每个绑定 UID 逐个走过码。
   async manualVerify(e) {
+    if (this._groupOnly(e)) return true
     if (this._disabled(e)) return true
     const verifyAddr = config().auto_sign_verify_addr || ''
     if (!verifyAddr) {
@@ -220,6 +243,7 @@ export class autoSign extends plugin {
   async onZzz(e) { return this._on(e, 'zzz') }
 
   async _on(e, game) {
+    if (this._groupOnly(e)) return true
     if (this._disabled(e)) return true
     const label = GAME_LABEL[game]
 
@@ -237,10 +261,10 @@ export class autoSign extends plugin {
     }
 
     const subs = loadSubs()
-    subs[game][String(e.user_id)] = { group: e.isGroup ? String(e.group_id) : '' }
+    subs[game][String(e.user_id)] = { group: String(e.group_id) }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${label}每日自动签到（名下 ${uidList.length} 个 UID）\n每天将自动签到，签到结果${e.isGroup ? '在本群' : '私聊'}回报\n发送 #${label}签到 可立即签一次`,
+      `✅ 已开启${label}每日自动签到（名下 ${uidList.length} 个 UID）\n每天将自动签到，本群统一发送签到汇总图\n发送 #${label}签到 可立即签一次`,
       true,
     )
     return true
@@ -252,6 +276,7 @@ export class autoSign extends plugin {
   async offZzz(e) { return this._off(e, 'zzz') }
 
   async _off(e, game) {
+    if (this._groupOnly(e)) return true
     const label = GAME_LABEL[game]
     const subs = loadSubs()
     const qq = String(e.user_id)
@@ -267,6 +292,7 @@ export class autoSign extends plugin {
 
   // -------- 列表 --------
   async listSubs(e) {
+    if (this._groupOnly(e)) return true
     const subs = loadSubs()
     const qq = String(e.user_id)
     const lines = ['📋 你的自动签到订阅：']
@@ -334,60 +360,179 @@ export class autoSign extends plugin {
   }
 
   // ============ 定时全量签到 ============
+  // 按订阅群分组：一次性把该群所有订阅者、所有游戏签完，
+  // 汇总成一张统计图发到群里，不再逐用户 @ 回报。
   async runAll() {
     const cfg = config()
     if (cfg.auto_sign_enable === false) return
     const subs = loadSubs()
 
+    // 汇总订阅计划：groupId -> Array<{ qq, game }>（无群的订阅跳过，不支持私聊）
+    const plan = {}
     for (const game of GAMES) {
       for (const qq of Object.keys(subs[game])) {
         const sub = subs[game][qq]
-        if (!sub) continue
+        if (!sub || !sub.group) continue
+        const gid = String(sub.group)
+        ;(plan[gid] || (plan[gid] = [])).push({ qq, game })
+      }
+    }
+
+    for (const gid of Object.keys(plan)) {
+      const startTs = Date.now()
+      const agg = { participants: new Set(), games: {} }
+      for (const g of GAMES) agg.games[g] = { ok: 0, already: 0, refresh: 0, expired: 0, fail: 0 }
+
+      for (const { qq, game } of plan[gid]) {
         try {
-          const fakeE = this.makeFakeE(qq, sub.group)
+          const fakeE = this.makeFakeE(qq, gid)
           const results = await this.signUserGame(fakeE, qq, game, null)
-          if (!results.length) continue
-          await this.report(qq, sub.group, game, results)
+          if (results.length) {
+            agg.participants.add(String(qq))
+            for (const r of results) this._tally(agg.games[game], r.code)
+          }
         } catch (err) {
           logger?.error?.(`[xhh-TL][自动签到] ${GAME_LABEL[game]} ${qq} 定时签到失败: ${err.message}`)
         }
-        // 用户间间隔
+        // 账号/用户间间隔，降低风控
         await new Promise((r) => setTimeout(r, 1500 + Math.floor(Math.random() * 1500)))
       }
-    }
-  }
 
-  /** 回报签到结果：有群则群里@，否则私聊 */
-  async report(qq, groupId, game, results) {
-    const label = GAME_LABEL[game]
-    const lines = results.map((r) => `· ${r.uid}：${r.msg}`)
-    // 撞验证码：自动 cron 无人手划，无法当场过码，引导用户手动重签（重签时会触发内置过码）
-    if (results.some((r) => r.code === 'captcha')) {
-      lines.push('（部分账号触发验证码，自动签失败；请手动发送 #' + label + '签到，撞码时按提示点链接手动划过）')
-    }
-    const text = `${label}自动签到结果：\n${lines.join('\n')}`
-    try {
-      if (groupId) {
-        const group = Bot.pickGroup(Number(groupId))
-        await group.sendMsg([segment.at(Number(qq)), ` ${text}`])
-      } else {
-        const friend = Bot.pickFriend(Number(qq))
-        await friend.sendMsg(text)
+      const totalCost = this._fmtCost(Date.now() - startTs)
+      try {
+        await this.reportGroup(gid, agg, totalCost)
+      } catch (err) {
+        logger?.error?.(`[xhh-TL][自动签到] 群 ${gid} 汇总回报失败: ${err.message}`)
       }
-      logger?.mark?.(`[xhh-TL][自动签到] 已回报 ${label} 给 ${qq}`)
-    } catch (err) {
-      logger?.error?.(`[xhh-TL][自动签到] 回报失败 ${qq}: ${err.message}`)
     }
   }
 
-  /** 构造假 e，供定时场景 resolveAuth/createUser 复用 */
+  /** 把单条签到结果码累加进该游戏的统计桶 */
+  _tally(bucket, code) {
+    switch (code) {
+      case 'ok': bucket.ok++; break
+      case 'already': bucket.already++; break
+      case 'expired': bucket.expired++; break
+      // captcha / first_bind / fail / 其他 → 统一计失败
+      default: bucket.fail++; break
+    }
+  }
+
+  /** 毫秒 → “X小时Y分Z秒” */
+  _fmtCost(ms) {
+    const s = Math.max(0, Math.round(ms / 1000))
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    let out = ''
+    if (h) out += `${h}小时`
+    if (h || m) out += `${m}分`
+    out += `${sec}秒`
+    return out
+  }
+
+  /** 渲染并发送某群的签到汇总图 */
+  async reportGroup(gid, agg, totalCost) {
+    // 只列有签到活动的游戏（任一计数 > 0）
+    const rows = []
+    let unsigned = 0
+    for (const game of GAMES) {
+      const b = agg.games[game]
+      const total = b.ok + b.already + b.refresh + b.expired + b.fail
+      if (!total) continue
+      unsigned += b.expired + b.fail
+      rows.push({
+        name: GAME_LABEL[game],
+        icon: toFileUrl(path.join(pluginDir, 'resources', GAME_ICON[game])),
+        ok: b.ok,
+        already: b.already,
+        refresh: b.refresh,
+        expired: b.expired,
+        fail: b.fail,
+      })
+    }
+    if (!rows.length) return // 该群本轮无任何可签账号
+
+    // 顶部头像：参与者 QQ 头像，最多 6 个
+    const headerIcons = [...agg.participants]
+      .slice(0, 6)
+      .map((qq) => `https://q1.qlogo.cn/g?b=qq&s=640&nk=${qq}.jpg`)
+
+    const image = await this.renderSummary({ rows, unsigned, totalCost, headerIcons })
+    if (!image) return
+    try {
+      const group = Bot.pickGroup(Number(gid))
+      await group.sendMsg(segment.image(image))
+      logger?.mark?.(`[xhh-TL][自动签到] 已发送群 ${gid} 汇总图（${rows.length} 个游戏，未签 ${unsigned}）`)
+    } catch (err) {
+      logger?.error?.(`[xhh-TL][自动签到] 群 ${gid} 汇总图发送失败: ${err.message}`)
+    }
+  }
+
+  /** 组装 renderData 并出图；定时场景借 Runtime 拿 render 能力 */
+  async renderSummary({ rows, unsigned, totalCost, headerIcons }) {
+    const cfg = config()
+    // 主题优先级：自动签到 → 角色持有率 → 全部深渊 → 浅色（各项可留空逐级回落）
+    const themeRaw = String(
+      cfg.auto_sign_theme || cfg.hold_rate_theme || cfg.gs_all_abyss_theme || 'light',
+    ).toLowerCase()
+    const theme = themeRaw === 'dark' ? 'dark' : 'light'
+    const renderScale = getRenderScaleStyle(cfg, 2.0)
+    // CSS background 用 file:// 有截图竞态（见 pluginConfig.toDataUrl 注释），内联成 data URI
+    const bgImage = toDataUrl(pickHelpBgImage({ logTag: 'xhh-TL][autoSign' }))
+    const signIcon = toFileUrl(path.join(pluginDir, 'resources/help/icons/signin.webp'))
+    const tplFile = path.join(pluginDir, 'resources/auto_sign/auto_sign.html')
+    const ppath = '../../../../plugins/xhh-TL/resources/'
+
+    const renderData = {
+      theme,
+      bgImage,
+      signIcon,
+      headerIcons,
+      totalCost,
+      unsigned,
+      rows,
+      generatedAt: moment().format('MM-DD HH:mm'),
+    }
+
+    // 定时场景无真实 e，用假 e + Runtime 复用渲染引擎
+    const fakeE = this.makeFakeE('0', '')
+    if (!fakeE.runtime?.render) {
+      logger?.error?.('[xhh-TL][自动签到] 渲染引擎不可用（runtime.render）')
+      return null
+    }
+    try {
+      const renderResult = await fakeE.runtime.render('xhh-TL', 'auto_sign', renderData, {
+        retType: 'base64',
+        imgType: 'png',
+        beforeRender({ data }) {
+          return {
+            ...data,
+            imgType: 'png',
+            sys: { scale: renderScale },
+            ppath,
+            tplFile,
+            saveId: 'auto_sign',
+          }
+        },
+      })
+      const image = extractRenderBuffer(renderResult)
+      if (!image) throw new Error('渲染结果中没有图片数据')
+      return image
+    } catch (err) {
+      logger?.error?.('[xhh-TL][自动签到] 渲染失败:', err)
+      return null
+    }
+  }
+
+  /** 构造假 e，供定时场景 resolveAuth/createUser/render 复用 */
   makeFakeE(qq, groupId) {
     const bot = Bot
     let group = null
     if (groupId) {
       try { group = bot.pickGroup?.(Number(groupId)) } catch (_) {}
     }
-    return {
+    const fakeE = {
       user_id: qq,
       self_id: bot?.uin,
       isGroup: !!groupId,
@@ -398,6 +543,8 @@ export class autoSign extends plugin {
       reply: () => {},
       sender: { nickname: String(qq) },
     }
+    try { fakeE.runtime = new Runtime(fakeE) } catch (_) {}
+    return fakeE
   }
 }
 

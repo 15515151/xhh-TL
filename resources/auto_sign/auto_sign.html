@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <style id="as-inline">
+* { margin: 0; padding: 0; box-sizing: border-box; }
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('../../../../plugins/xhh-TL/resources/font/NotoSansCJKsc-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+html, body {
+  width: 900px;
+  margin: 0;
+  padding: 0;
+  background: #07090f;
+}
+
+body {
+  color: #e8eaf0;
+  font-family: 'NotoSansSC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  transform-origin: 0 0;
+}
+
+.as-page {
+  position: relative;
+  width: 900px;
+  box-sizing: border-box;
+  min-height: 300px;
+  padding: 26px 28px 20px;
+  overflow: hidden;
+  background-color: #0b0f18;
+  background-image:
+    linear-gradient(165deg, rgba(11, 15, 24, 0.72) 0%, rgba(10, 13, 20, 0.78) 45%, rgba(8, 10, 16, 0.85) 100%),
+    var(--as-bg, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.as-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+  opacity: 0.4;
+}
+.as-glow.a { width: 280px; height: 280px; background: #3d7eff; top: -80px; right: -40px; }
+.as-glow.b { width: 220px; height: 220px; background: #7b61ff; bottom: 40px; left: -60px; }
+
+/* ============ 顶部完成横幅 ============ */
+.as-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: rgba(18, 24, 38, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.as-head-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.as-head-icon {
+  width: 56px; height: 56px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 14px;
+  background: rgba(88, 166, 255, 0.14);
+  border: 1px solid rgba(88, 166, 255, 0.26);
+}
+.as-head-icon img { width: 38px; height: 38px; object-fit: contain; }
+.as-head-emoji { font-size: 30px; }
+.as-head-text { min-width: 0; }
+.as-title {
+  font-size: 28px; font-weight: 800; color: #fff;
+  letter-spacing: -0.01em; line-height: 1.15;
+}
+.as-sub {
+  margin-top: 6px;
+  font-size: 14px; color: #9aa6c0;
+}
+.as-sub .warn { color: #ffb86b; font-weight: 700; }
+.as-avatars { display: flex; align-items: center; flex-shrink: 0; }
+.as-avatars .av {
+  width: 44px; height: 44px; border-radius: 50%;
+  object-fit: cover; margin-left: -10px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.as-avatars .av:first-child { margin-left: 0; }
+
+/* ============ 签到列表卡片 ============ */
+.as-card {
+  position: relative;
+  z-index: 1;
+  padding: 16px 18px 8px;
+  border-radius: 18px;
+  background: rgba(14, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.as-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.as-card-title {
+  font-size: 18px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; gap: 8px;
+}
+.as-card-meta { font-size: 13px; color: #7a8499; }
+
+/* ============ 表格 ============ */
+.as-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.as-table th {
+  padding: 12px 8px;
+  font-size: 13px; font-weight: 600; color: #8b93a7;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.as-table td {
+  padding: 16px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+.as-table tbody tr:last-child td { border-bottom: none; }
+
+.c-idx { width: 48px; color: #7a8499; font-weight: 600; font-size: 14px; }
+/* 固定列宽 + flex 靠左，图标起点不随游戏名字数浮动 */
+.as-table td.c-game { width: 260px; text-align: left; padding-left: 16px; }
+.c-game .g-cell { display: flex; align-items: center; gap: 12px; }
+.c-game .g-cell img {
+  width: 40px; height: 40px; flex-shrink: 0;
+  object-fit: cover; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.c-game .g-name { font-weight: 700; color: #f2f5ff; font-size: 16px; }
+
+.n-ok { color: #4ad2a0; font-weight: 800; }
+.n-already { color: #6ba8ff; font-weight: 700; }
+.n-refresh { color: #b8c0d4; font-weight: 600; }
+.n-expired { color: #8b93a7; font-weight: 600; }
+.n-expired.warn { color: #ffb86b; font-weight: 800; }
+.n-fail { color: #8b93a7; font-weight: 600; }
+.n-fail.bad { color: #ff6b6b; font-weight: 800; }
+
+.as-foot {
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px; color: #5c6478;
+  letter-spacing: 0.04em;
+}
+  </style>
+</head>
+<body {{sys.scale}}>
+  <div class="as-page" id="container" {{if bgImage}}style="--as-bg:url('{{bgImage}}')"{{/if}}>
+    <div class="as-glow a"></div>
+    <div class="as-glow b"></div>
+
+    <!-- 顶部完成横幅 -->
+    <div class="as-head">
+      <div class="as-head-left">
+        <div class="as-head-icon">
+          {{if signIcon}}<img src="{{signIcon}}" alt="" />{{else}}<span class="as-head-emoji">📅</span>{{/if}}
+        </div>
+        <div class="as-head-text">
+          <div class="as-title">米游社自动签到完成</div>
+          <div class="as-sub">总耗时: {{totalCost}}，未签 <span class="{{if unsigned}}warn{{/if}}">{{unsigned}}</span></div>
+        </div>
+      </div>
+      <div class="as-avatars">
+        {{each headerIcons ic}}
+        <img class="av" src="{{ic}}" alt="" />
+        {{/each}}
+      </div>
+    </div>
+
+    <!-- 签到列表 -->
+    <div class="as-card">
+      <div class="as-card-head">
+        <div class="as-card-title">📋 签到列表</div>
+        <div class="as-card-meta">{{generatedAt}}</div>
+      </div>
+      <table class="as-table">
+        <thead>
+          <tr>
+            <th class="c-idx">#</th>
+            <th class="c-game" style="text-align:left;padding-left:16px;">签到游戏</th>
+            <th>成功</th>
+            <th>已签</th>
+            <th>刷新成功</th>
+            <th>失效</th>
+            <th>失败</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{each rows r idx}}
+          <tr>
+            <td class="c-idx">{{idx + 1}}</td>
+            <td class="c-game">
+              <div class="g-cell">
+                {{if r.icon}}<img src="{{r.icon}}" alt="" />{{/if}}<span class="g-name">{{r.name}}</span>
+              </div>
+            </td>
+            <td class="n-ok">{{r.ok}}</td>
+            <td class="n-already">{{r.already}}</td>
+            <td class="n-refresh">{{r.refresh}}</td>
+            <td class="n-expired {{if r.expired}}warn{{/if}}">{{r.expired}}</td>
+            <td class="n-fail {{if r.fail}}bad{{/if}}">{{r.fail}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="as-foot">小花火 · 米游社自动签到 · {{generatedAt}}</div>
+  </div>
+</body>
+</html>
