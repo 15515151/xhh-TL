@@ -201,6 +201,12 @@ export class role_combat extends plugin {
       priority: -9999,
       rule: [
         {
+          // #下期幻想角色 / #下期幻想剧诗角色 — 以当前月为基准取下一期（下月）角色池
+          // 注意：需排在通用规则之前，避免被 (?:原神)?幻想… 抢先匹配
+          reg: '^\\s*#?(?:原神)?下期(?:幻想剧诗(?:角色|可用角色|当期角色|本期角色|查询)?|幻想角色|幻想可用角色|幻想当期角色|幻想本期角色|幻想查询|幻想剧诗|幻想)\\s*$',
+          fnc: 'nextRoleCombat',
+        },
+        {
           // #幻想剧诗 / 幻想角色 / #幻想202607；仅允许可选月份后缀，其它尾巴不触发
           // 可选 #；仅允许已知后缀/月份，尾部乱码不触发
           reg: '^\\s*#?(?:原神)?(?:幻想剧诗(?:角色|可用角色|当期角色|本期角色|查询)?|幻想角色|幻想可用角色|幻想当期角色|幻想本期角色|幻想查询|幻想(?:角色|可用角色|当期角色|本期角色|查询|剧诗)?(?:20\\d{4}|20\\d{2}[-/.年]?\\d{1,2}月?))\\s*$',
@@ -210,9 +216,16 @@ export class role_combat extends plugin {
     });
   }
 
-  async roleCombat(e) {
+  async nextRoleCombat(e) {
+    // 以当前月为基准 +1 个月，作为“下期”请求月份；数据未发布时 loadRoleCombat 会回退到最新一期
+    const cur = moment().format('YYYYMM');
+    const nextMonth = indexToMonth(monthToIndex(cur) + 1);
+    return this.roleCombat(e, nextMonth);
+  }
+
+  async roleCombat(e, monthOverride) {
     await replyProgress(e, '正在获取幻想真境剧诗数据，请稍后...');
-    const requestedMonth = parseMonth(e.msg || '');
+    const requestedMonth = monthOverride || parseMonth(e.msg || '');
 
     // 检测 @提及
     let targetQq = null;

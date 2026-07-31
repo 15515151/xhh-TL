@@ -186,6 +186,11 @@ export function buildHelpGroups() {
           desc: '当期限制元素 / 特邀 / 可用角色',
         },
         {
+          icon: 'gs-妮露.webp',
+          title: '#下期幻想角色',
+          desc: '下期限制元素 / 特邀 / 可用角色（未发布则回退最新）',
+        },
+        {
           icon: 'gs-甘雨.webp',
           title: '#幻想202607 #幻想2026年7月',
           desc: '按月份回看幻想剧诗角色池',
