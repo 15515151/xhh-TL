@@ -246,6 +246,10 @@ export class resinPush extends plugin {
     }
 
     const subs = loadSubs()
+    // 主号推送与全推送互斥：同游戏两者同开会让主 UID 被两条循环各推一次（重复@发图）。
+    // 开主号推送即清掉该游戏的全推送订阅。
+    const hadAll = !!subs[ALL_KEY(game)][String(e.user_id)]
+    delete subs[ALL_KEY(game)][String(e.user_id)]
     subs[game][String(e.user_id)] = {
       threshold,
       group: String(e.group_id),
@@ -253,7 +257,7 @@ export class resinPush extends plugin {
     }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${meta.label}体力推送\n当${meta.unit} ≥ ${threshold} 时，会在本群@你并发送体力图\n（达到后只提醒一次，回落后自动重新监控）`,
+      `✅ 已开启${meta.label}体力推送\n当${meta.unit} ≥ ${threshold} 时，会在本群@你并发送体力图\n（达到后只提醒一次，回落后自动重新监控）${hadAll ? `\n（已自动关闭原${meta.label}体力全推送，两者互斥）` : ''}`,
       true,
     )
     return true
@@ -311,6 +315,9 @@ export class resinPush extends plugin {
     }
 
     const subs = loadSubs()
+    // 与主号推送互斥：开全推送即清掉该游戏的主号推送订阅（主 UID 已含在全推送里）。
+    const hadMain = !!subs[game][String(e.user_id)]
+    delete subs[game][String(e.user_id)]
     const uids = {}
     for (const uid of validUids) uids[uid] = { armed: true }
     subs[ALL_KEY(game)][String(e.user_id)] = {
@@ -320,7 +327,7 @@ export class resinPush extends plugin {
     }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）`,
+      `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）${hadMain ? `\n（已自动关闭原${meta.label}体力推送，两者互斥）` : ''}`,
       true,
     )
     return true
@@ -444,6 +451,18 @@ export class resinPush extends plugin {
     const scale = getRenderScaleStyle(cfg, 1.0)
     const tl = new TL()
 
+    // 同一轮去重：同一 QQ 的同一真实账号只推一次。
+    // 「主号推送」监控主 UID，「全推送」监控名下全部 UID（必然含主 UID），
+    // 两者同开时主 UID 会被两条循环各推一次 → 重复@发图。
+    // key 用 qq+game+真实账号：优先 item._ownerSid（凭证属主 stuid，由 TL.note 挂载），
+    // 缺失时退回请求 UID 保持旧行为。用属主而非请求 UID 是因为原神体力 widget 接口
+    // 不带 uid、只认 stoken 所属账号——全推送里两个不同 UID 若选到同一把凭证，
+    // 拿到的其实是同一个账号的体力，按请求 UID 判重永远撞不上。
+    // 不同 QQ 共用同一账号时仍各自@（key 含 qq，互不影响）。
+    const pushedUids = new Set()
+    const pushKey = (qq, game, id) => `${qq}:${game}:${id}`
+    const realId = (item, fallbackUid) => String(item?._ownerSid || fallbackUid)
+
     for (const game of GAMES) {
       const meta = GAME_META[game]
       for (const qq of Object.keys(subs[game])) {
@@ -468,6 +487,8 @@ export class resinPush extends plugin {
           if (sub.armed) {
             const ok = await this.pushOne(tl, qq, game, sub, item, scale)
             if (ok) {
+              // 主号推送先跑：标记该真实账号已推，后面全推送循环遇到同账号直接跳过
+              pushedUids.add(pushKey(qq, game, realId(item, item.uid)))
               sub.armed = false
               armedChanges.push({ key: game, qq, armed: false })
             }
@@ -502,8 +523,18 @@ export class resinPush extends plugin {
 
             // 达到阈值且仍处于武装状态 → 推送一次
             if (state.armed) {
+              // 同一 QQ 的该真实账号本轮已被「主号推送」推过 → 跳过，避免重复@发图。
+              // 仍照常把 armed 置 false 落盘，行为与推送后一致（回落再重新武装），
+              // 否则每轮都会尝试推一次、每轮被拦，状态永远停在 armed。
+              const rid = realId(item, uid)
+              if (pushedUids.has(pushKey(qq, game, rid))) {
+                state.armed = false
+                armedChanges.push({ key: ALL_KEY(game), qq, uid, armed: false })
+                continue
+              }
               const ok = await this.pushOne(tl, qq, game, allSub, item, scale, uid)
               if (ok) {
+                pushedUids.add(pushKey(qq, game, rid))
                 state.armed = false
                 armedChanges.push({ key: ALL_KEY(game), qq, uid, armed: false })
               }
@@ -576,7 +607,13 @@ export class resinPush extends plugin {
     try {
       const group = fakeE.group || Bot.pickGroup(Number(sub.group))
       await group.sendMsg([segment.at(Number(qq)), ` ${tip}\n`, imgSeg])
-      logger?.mark?.(`[xhh-TL][体力推送] 已推送 ${meta.label} 给 ${qq}@群${sub.group}`)
+      // 带上 UID 与真实账号：多账号/全推送排查重复推送时，光有 QQ 分不清是哪个号。
+      // uid=请求的 UID，sid=实际返回数据的凭证属主（两者不一致即说明选号串了）。
+      const logUid = forceUid || item?.uid || '?'
+      const sid = item?._ownerSid
+      logger?.mark?.(
+        `[xhh-TL][体力推送] 已推送 ${meta.label} 给 ${qq}@群${sub.group} uid=${logUid}${sid ? ` sid=${sid}` : ''}`,
+      )
       return true
     } catch (err) {
       logger?.error?.(`[xhh-TL][体力推送] 发送失败 ${qq}@群${sub.group}: ${err.message}`)

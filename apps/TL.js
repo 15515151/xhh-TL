@@ -5,7 +5,7 @@ import md5 from 'md5';
 import lodash from 'lodash';
 import plugin from '../../../lib/plugins/plugin.js';
 import { createUser } from '../utils/userBind.js';
-import { getstoken } from '../utils/auth.js';
+import { getstoken, cookiePart } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
 import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { extractRenderBuffer } from '../utils/renderImage.js';
@@ -1213,6 +1213,22 @@ export class TL extends plugin {
       time: time == 0 ? '已满' : getTime(time),
       ...res.data,
     };
+
+    // 标注这份数据实际来自哪个米游社账号（stoken/CK 的属主 stuid）。
+    // 原神体力 widget 接口不带 uid、只认 stoken 所属账号：两个不同的请求 UID
+    // 若选到同一把凭证，返回的其实是同一个账号的体力。调用方（体力推送去重）
+    // 需要按「真实账号」而非「请求 UID」判重，否则拦不住重复推送。
+    // 用不可枚举属性挂载：不进 JSON / 不被 {...data} 带走，渲染层零影响。
+    const ownerSid =
+      cookiePart(headers?.Cookie || '', 'stuid') ||
+      cookiePart(headers?.Cookie || '', 'account_id') ||
+      cookiePart(headers?.Cookie || '', 'ltuid');
+    if (ownerSid) {
+      Object.defineProperty(data, '_ownerSid', {
+        value: String(ownerSid),
+        enumerable: false,
+      });
+    }
 
     // 原神活动日历：widget 接口不返回活动，用 cookie 额外拉 act_calendar（需完整 CK；失败静默不阻塞体力主流程）
     if (game === 'gs' && config().tl_widget_activity !== false) {
