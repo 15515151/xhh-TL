@@ -155,7 +155,7 @@ export class autoSign extends plugin {
     const label = GAME_LABEL[game]
     const results = await this.signUserGame(e, e.user_id, game, e)
     if (!results.length) {
-      e.reply(`你还没有绑定${label}账号，请先【扫码绑定】米游社~`, true)
+      e.reply(`你还没有绑定${label}账号，请先【#扫码登录】米游社~`, true)
       return true
     }
     const lines = [`${label}签到结果：`]
@@ -196,7 +196,7 @@ export class autoSign extends plugin {
       logger?.error?.(`[xhh-TL][过码] 枚举 UID 失败 ${e.user_id}: ${err.message}`)
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${label}账号，请先【扫码绑定】米游社~`, true)
+      e.reply(`你还没有绑定${label}账号，请先【#扫码登录】米游社~`, true)
       return true
     }
 
@@ -210,7 +210,7 @@ export class autoSign extends plugin {
         )
         const auth = await resolveAuth(authE, { needCookie: true, game })
         if (!auth?.ck || !/cookie_token|account_id=/.test(auth.ck)) {
-          lines.push(`· ${uid}：无有效登录，请重新扫码绑定`)
+          lines.push(`· ${uid}：无有效登录，请【#刷新ck】，仍不行则【#扫码登录】`)
           continue
         }
         const realUid = auth.uid || uid
@@ -260,7 +260,7 @@ export class autoSign extends plugin {
       logger?.error?.(`[xhh-TL][自动签到] 枚举 UID 失败 ${e.user_id}: ${err.message}`)
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${label}账号（或名下 UID 均无有效 CK），请先【扫码绑定】米游社后再开启自动签到~`, true)
+      e.reply(`你还没有绑定${label}账号（或名下 UID 均无有效 CK），请先【#扫码登录】米游社后再开启自动签到~`, true)
       return true
     }
 
@@ -342,7 +342,7 @@ export class autoSign extends plugin {
           : { user_id: qq, self_id: e?.self_id, message: [], msg: String(uid), uid }
         const auth = await resolveAuth(authE, { needCookie: true, game })
         if (!auth?.ck || !/cookie_token|account_id=/.test(auth.ck)) {
-          results.push({ uid, code: 'expired', msg: `${GAME_LABEL[game]} 无有效登录，请重新扫码绑定`, game })
+          results.push({ uid, code: 'expired', msg: `${GAME_LABEL[game]} 无有效登录，请【#刷新ck】，仍不行则【#扫码登录】`, game })
           continue
         }
         // 手动签到(realE 为真实事件)且配了打码地址时，撞码可当场过码重试；

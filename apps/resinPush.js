@@ -222,7 +222,7 @@ export class resinPush extends plugin {
       return true
     }
 
-    // 开启前先校验：必须真能查到自己该游戏的体力（已扫码绑定 stoken）才允许订阅，
+    // 开启前先校验：必须真能查到自己该游戏的体力（已#扫码登录 stoken）才允许订阅，
     // 否则要么根本没绑（不该推送），要么会被兜底 CK 顶成别人的号（串号）。
     let item
     try {
@@ -233,11 +233,11 @@ export class resinPush extends plugin {
       return true
     }
     if (item === '没有' || !item) {
-      e.reply(`你还没有绑定${meta.label}账号，请先【扫码绑定】米游社后再开启体力推送~`, true)
+      e.reply(`你还没有绑定${meta.label}账号，请先【#扫码登录】米游社后再开启体力推送~`, true)
       return true
     }
     if (item === '过期') {
-      e.reply(`你的${meta.label}米游社登录已过期，请重新【扫码绑定】后再开启体力推送~`, true)
+      e.reply(`你的${meta.label}米游社登录已过期，请【#刷新ck】，仍不行则【#扫码登录】后再开启体力推送~`, true)
       return true
     }
     if (!meta.hasField(item)) {
@@ -282,7 +282,7 @@ export class resinPush extends plugin {
       return true
     }
 
-    // 枚举该 QQ 该游戏名下所有绑定 UID，逐个校验能否查到体力（已扫码绑定 stoken）
+    // 枚举该 QQ 该游戏名下所有绑定 UID，逐个校验能否查到体力（已#扫码登录 stoken）
     const tl = new TL()
     let uidList
     try {
@@ -294,7 +294,7 @@ export class resinPush extends plugin {
       return true
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${meta.label}账号，请先【扫码绑定】米游社后再开启体力推送~`, true)
+      e.reply(`你还没有绑定${meta.label}账号，请先【#扫码登录】米游社后再开启体力推送~`, true)
       return true
     }
 
@@ -310,7 +310,7 @@ export class resinPush extends plugin {
       }
     }
     if (!validUids.length) {
-      e.reply(`暂时查不到你的${meta.label}体力，请确认已正确【扫码绑定】后再试~`, true)
+      e.reply(`暂时查不到你的${meta.label}体力，请试【#刷新ck】，仍不行则【#扫码登录】`, true)
       return true
     }
 

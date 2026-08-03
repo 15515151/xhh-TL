@@ -162,7 +162,7 @@ async function callApi(e, type, game, uid, server, headers, silent = false) {
       case -1: case -100: case 1001: case 10001: case 10103:
         msg = `${uid ? 'UID:' + uid : ''}米游社查询失败，无法查询`;
         if (/(登录|login)/i.test(res.message)) {
-          msg = `${uid ? 'UID:' + uid : ''}Cookie失效，请[刷新ck]或[扫码绑定]`;
+          msg = `${uid ? 'UID:' + uid : ''}Cookie 失效，请【#刷新ck】，仍不行则【#扫码登录】`;
         }
         break;
       case -110:
@@ -322,11 +322,11 @@ export class TL extends plugin {
       return true;
     }
     if (Object.values(resultData).every(v => v === '没有')) {
-      if (hasAllData) e.reply('没有绑定米游社，请[扫码绑定]米游社', true);
+      if (hasAllData) e.reply('没有绑定米游社，请【#扫码登录】米游社', true);
       return true;
     }
     if (Object.values(resultData).every(v => v === '过期')) {
-      if (hasAllData) e.reply('米游社验证已过期。请重新：扫码绑定 ', true);
+      if (hasAllData) e.reply('米游社验证已过期，请【#刷新ck】，仍不行则【#扫码登录】', true);
       return true;
     }
 
@@ -1115,7 +1115,7 @@ export class TL extends plugin {
     }
 
     if (!uid) {
-      if (!san) e.reply('未发现绑定的uid，请[扫码绑定]米游社~');
+      if (!san) e.reply('未发现绑定的 uid，请【#扫码登录】米游社~');
       return '没有';
     }
 
@@ -1141,7 +1141,7 @@ export class TL extends plugin {
 
     if (!sk) {
       if (!san)
-        e.reply('UID:' + uid + '未绑定米游社SToken，请[扫码绑定]米游社~', true);
+        e.reply('UID:' + uid + ' 未绑定米游社 SToken，请【#扫码登录】米游社~', true);
       return '没有';
     }
     // sk 可能是纯 cookie：无扫码 stoken 的用户走 getstoken 的 SQLite 兜底，
@@ -1177,7 +1177,7 @@ export class TL extends plugin {
 
     if ([-10001, 10001, -100].includes(res?.retcode)) {
       if (!san) {
-        e.reply('登录验证过期。请重新：扫码绑定 ');
+        e.reply('登录验证过期，请【#刷新ck】，仍不行则【#扫码登录】');
       }
       return '过期';
     }

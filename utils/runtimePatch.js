@@ -248,13 +248,13 @@ export async function ensureRuntime(e, opts = {}) {
       const auth = await resolveAuth(e, { needCookie: true, game })
       if (!auth.uid) {
         if (e.noTips !== true) {
-          e.reply?.('请先绑定 UID（#绑定uid / 扫码绑定）')
+          e.reply?.('请先绑定 UID（【#绑定uid】或【#扫码登录】）')
         }
         return false
       }
       if (!auth.ck) {
         if (e.noTips !== true) {
-          e.reply?.(`UID:${auth.uid} 未找到可用 Cookie，请扫码绑定或绑定 CK`)
+          e.reply?.(`UID:${auth.uid} 未找到可用 Cookie，请【#刷新ck】，仍不行则【#扫码登录】`)
         }
         // cookie 模式必须有 ck
         if (needCookie) return false

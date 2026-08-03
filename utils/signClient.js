@@ -133,7 +133,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
     }).then((r) => r.json())
 
     if ([-100, -101, 10001, -10001].includes(Number(infoRes?.retcode))) {
-      return { code: 'expired', msg: `${label} 登录已失效，请重新扫码绑定`, game, uid }
+      return { code: 'expired', msg: `${label} 登录已失效，请【#刷新ck】，仍不行则【#扫码登录】`, game, uid }
     }
     if (infoRes?.data?.first_bind) {
       return { code: 'first_bind', msg: `${label} 需先在米游社 App 手动签到一次`, game, uid }
@@ -179,7 +179,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
       return { code: 'captcha', msg: `${label} 签到触发验证码`, game, uid }
     }
     if ([-100, -101, 10001, -10001].includes(rc)) {
-      return { code: 'expired', msg: `${label} 登录已失效，请重新扫码绑定`, game, uid }
+      return { code: 'expired', msg: `${label} 登录已失效，请【#刷新ck】，仍不行则【#扫码登录】`, game, uid }
     }
     // -10002 未查询到游戏角色：此 cookie 名下没有该 UID（跨账号），上层会过滤掉
     if (rc === -10002) {

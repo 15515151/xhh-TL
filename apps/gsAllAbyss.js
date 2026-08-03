@@ -515,7 +515,7 @@ export class gsAllAbyss extends plugin {
     if (!mys || !await mys.checkCk()) {
       return e.reply(
         mys
-          ? `UID: ${mys.uid} Cookie 失效，请重新登录或【#刷新ck】`
+          ? `UID: ${mys.uid} Cookie 失效，请【#刷新ck】，仍不行则【#扫码登录】`
           : '请绑定 Cookie 后再使用 #全部深渊',
       )
     }

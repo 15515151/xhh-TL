@@ -254,7 +254,7 @@ export async function allAbyss(e) {
       await prepareMysContext(e, 'sr');
       let mys = await MysApi.init(e, 'all');
       if (!mys || !await mys.checkCk()) {
-        e.reply(mys ? `UID: ${mys.uid} Cookie失效，请重新登录或尝试【#刷新ck】` : '请绑定ck后再使用*全部深渊');
+        e.reply(mys ? `UID: ${mys.uid} Cookie 失效，请【#刷新ck】，仍不行则【#扫码登录】` : '请先【#扫码登录】或绑定 CK 后再使用 *全部深渊');
         return false;
       }
 
