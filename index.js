@@ -12,6 +12,7 @@ import { nanokaAbyss } from './apps/nanokaAbyss.js'
 import { help } from './apps/help.js'
 import { resinPush } from './apps/resinPush.js'
 import { autoSign } from './apps/autoSign.js'
+import { autoBbsCoin } from './apps/autoBbsCoin.js'
 import { TLDelCkHook } from './apps/delCkHook.js'
 
 export {
@@ -28,6 +29,7 @@ export {
   help,
   resinPush,
   autoSign,
+  autoBbsCoin,
   TLDelCkHook,
 }
 

@@ -146,6 +146,33 @@ export function buildHelpGroups() {
       ],
     },
     {
+      group: '米游币任务',
+      desc: '社区做任务赚币 · 需 stoken',
+      color: 'gold',
+      list: [
+        {
+          icon: 'signin.webp',
+          title: '#开启自动米游币',
+          desc: '开启每日自动做任务；停用发 #关闭自动米游币',
+        },
+        {
+          icon: 'active.webp',
+          title: '#米游币签到',
+          desc: '立即跑一次：版块签到+看帖+点赞+分享',
+        },
+        {
+          icon: 'multi.webp',
+          title: '#米游币余额',
+          desc: '只查米游币余额与今日剩余可获取',
+        },
+        {
+          icon: 'mask.webp',
+          title: '#自动米游币列表',
+          desc: '查看自己是否已开启每日自动米游币',
+        },
+      ],
+    },
+    {
       group: '原神 · 成绩汇总',
       desc: '个人通关 · 需绑定 Cookie',
       color: 'cyan',

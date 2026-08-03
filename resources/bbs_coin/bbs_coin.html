@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <style id="bc-inline">
+* { margin: 0; padding: 0; box-sizing: border-box; }
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('../../../../plugins/xhh-TL/resources/font/NotoSansCJKsc-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+html, body {
+  width: 900px;
+  margin: 0;
+  padding: 0;
+  background: #07090f;
+}
+
+body {
+  color: #e8eaf0;
+  font-family: 'NotoSansSC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  transform-origin: 0 0;
+}
+
+.bc-page {
+  position: relative;
+  width: 900px;
+  box-sizing: border-box;
+  min-height: 300px;
+  padding: 26px 28px 20px;
+  overflow: hidden;
+  background-color: #0b0f18;
+  background-image:
+    linear-gradient(165deg, rgba(11, 15, 24, 0.72) 0%, rgba(10, 13, 20, 0.78) 45%, rgba(8, 10, 16, 0.85) 100%),
+    var(--bc-bg, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.bc-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+  opacity: 0.4;
+}
+.bc-glow.a { width: 280px; height: 280px; background: #ffb347; top: -80px; right: -40px; }
+.bc-glow.b { width: 220px; height: 220px; background: #ff7b5a; bottom: 40px; left: -60px; }
+
+/* ============ 顶部横幅 ============ */
+.bc-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: rgba(18, 24, 38, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.bc-head-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.bc-head-icon {
+  width: 56px; height: 56px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 14px;
+  background: rgba(255, 179, 71, 0.14);
+  border: 1px solid rgba(255, 179, 71, 0.26);
+}
+.bc-head-icon img { width: 38px; height: 38px; object-fit: contain; }
+.bc-head-emoji { font-size: 30px; }
+.bc-head-text { min-width: 0; }
+.bc-title {
+  font-size: 28px; font-weight: 800; color: #fff;
+  letter-spacing: -0.01em; line-height: 1.15;
+}
+.bc-sub {
+  margin-top: 6px;
+  font-size: 14px; color: #9aa6c0;
+}
+.bc-sub .gain { color: #ffc46b; font-weight: 800; font-size: 16px; }
+.bc-sub .warn { color: #ff8f6b; font-weight: 700; }
+.bc-avatars { display: flex; align-items: center; flex-shrink: 0; }
+.bc-avatars .av {
+  width: 44px; height: 44px; border-radius: 50%;
+  object-fit: cover; margin-left: -10px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.bc-avatars .av:first-child { margin-left: 0; }
+
+/* ============ 任务列表卡片 ============ */
+.bc-card {
+  position: relative;
+  z-index: 1;
+  padding: 16px 18px 8px;
+  border-radius: 18px;
+  background: rgba(14, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.bc-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.bc-card-title {
+  font-size: 18px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; gap: 8px;
+}
+.bc-card-meta { font-size: 13px; color: #7a8499; }
+
+/* ============ 表格 ============ */
+.bc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.bc-table th {
+  padding: 12px 8px;
+  font-size: 13px; font-weight: 600; color: #8b93a7;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.bc-table td {
+  padding: 16px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+.bc-table tbody tr:last-child td { border-bottom: none; }
+
+.c-idx { width: 48px; color: #7a8499; font-weight: 600; font-size: 14px; }
+/* 固定列宽 + flex 靠左，图标起点不随版块名字数浮动 */
+.bc-table td.c-game { width: 260px; text-align: left; padding-left: 16px; }
+.c-game .g-cell { display: flex; align-items: center; gap: 12px; }
+.c-game .g-cell img {
+  width: 40px; height: 40px; flex-shrink: 0;
+  object-fit: cover; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.c-game .g-name { font-weight: 700; color: #f2f5ff; font-size: 16px; }
+
+.n-signed { color: #4ad2a0; font-weight: 800; }
+.n-read { color: #6ba8ff; font-weight: 700; }
+.n-vote { color: #c89bff; font-weight: 700; }
+.n-share { color: #ffc46b; font-weight: 700; }
+.n-err { color: #8b93a7; font-weight: 600; }
+.n-err.bad { color: #ff6b6b; font-weight: 800; }
+
+.bc-foot {
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px; color: #5c6478;
+  letter-spacing: 0.04em;
+}
+  </style>
+</head>
+<body {{sys.scale}}>
+  <div class="bc-page" id="container" {{if bgImage}}style="--bc-bg:url('{{bgImage}}')"{{/if}}>
+    <div class="bc-glow a"></div>
+    <div class="bc-glow b"></div>
+
+    <!-- 顶部横幅 -->
+    <div class="bc-head">
+      <div class="bc-head-left">
+        <div class="bc-head-icon">
+          {{if coinIcon}}<img src="{{coinIcon}}" alt="" />{{else}}<span class="bc-head-emoji">💰</span>{{/if}}
+        </div>
+        <div class="bc-head-text">
+          <div class="bc-title">米游币任务完成</div>
+          <div class="bc-sub">
+            本次获得 <span class="gain">+{{gained}}</span> 米游币，当前共 {{totalCoin}}
+            ，耗时 {{totalCost}}{{if failed}}，<span class="warn">失败 {{failed}}</span>{{/if}}
+          </div>
+        </div>
+      </div>
+      <div class="bc-avatars">
+        {{each headerIcons ic}}
+        <img class="av" src="{{ic}}" alt="" />
+        {{/each}}
+      </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="bc-card">
+      <div class="bc-card-head">
+        <div class="bc-card-title">💰 米游币任务</div>
+        <div class="bc-card-meta">{{generatedAt}}</div>
+      </div>
+      <table class="bc-table">
+        <thead>
+          <tr>
+            <th class="c-idx">#</th>
+            <th class="c-game" style="text-align:left;padding-left:16px;">版块</th>
+            <th>签到</th>
+            <th>浏览</th>
+            <th>点赞</th>
+            <th>分享</th>
+            <th>异常</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{each rows r idx}}
+          <tr>
+            <td class="c-idx">{{idx + 1}}</td>
+            <td class="c-game">
+              <div class="g-cell">
+                {{if r.icon}}<img src="{{r.icon}}" alt="" />{{/if}}<span class="g-name">{{r.name}}</span>
+              </div>
+            </td>
+            <td class="n-signed">{{r.signed}}</td>
+            <td class="n-read">{{r.read}}</td>
+            <td class="n-vote">{{r.vote}}</td>
+            <td class="n-share">{{r.share}}</td>
+            <td class="n-err {{if r.err}}bad{{/if}}">{{r.err}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bc-foot">小花火 · 米游币社区任务 · {{generatedAt}}</div>
+  </div>
+</body>
+</html>

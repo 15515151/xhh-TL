@@ -436,6 +436,63 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
+          label: '米游币社区任务'
+        },
+        {
+          field: 'bbs_coin_enable',
+          label: '启用米游币任务',
+          bottomHelpMessage:
+            '与上面「自动签到」是两回事：签到领原石走游戏 UID+cookie_token；米游币是社区做任务（版块签到+看帖+点赞+分享）赚币，走米游社账号+stoken。用户 opt-in：发 #开启自动米游币 后才纳入。指令：#米游币签到（立即跑）/ #米游币余额（查余额）/ #关闭自动米游币 / #自动米游币列表。⚠️ 需要 stoken（#扫码登录才有），普通 CK 做不了',
+          component: 'Switch'
+        },
+        {
+          field: 'bbs_coin_cron',
+          label: '米游币任务 cron',
+          bottomHelpMessage:
+            '标准 5 段 cron（分 时 日 月 周）。默认每天 0:50：50 0 * * *。已过米游社每日 0 点刷新，且与自动签到的 00:23 错开，避免同时段风控叠加',
+          component: 'Input',
+          componentProps: {
+            placeholder: '50 0 * * *'
+          }
+        },
+        {
+          field: 'bbs_coin_games',
+          label: '做哪些版块',
+          bottomHelpMessage:
+            '逗号分隔：gs=原神 sr=星铁 zzz=绝区零。米游币每日上限通常单版块即可拿满；版块越多耗时越长、风控概率略高。留空或填错则默认全部',
+          component: 'Input',
+          componentProps: {
+            placeholder: 'gs,sr,zzz'
+          }
+        },
+        {
+          field: 'bbs_coin_theme',
+          label: '米游币汇总图主题',
+          bottomHelpMessage:
+            '每日任务完成后发到群里的汇总图配色。浅色=白玻璃；深色=黑色半透明。留空则跟随「自动签到主题 / 全部深渊主题」',
+          component: 'Select',
+          componentProps: {
+            options: [
+              { label: '跟随自动签到', value: '' },
+              { label: '浅色', value: 'light' },
+              { label: '深色', value: 'dark' }
+            ]
+          }
+        },
+        {
+          field: 'bbs_coin_gsuid_db',
+          label: 'gsuid 数据库路径',
+          bottomHelpMessage:
+            '米游币任务需要 stoken。若你同时在跑 gsuid_core（早柚core），它#扫码登录的 stoken 存在 GsData.db 里，且带该账号注册过的真实 device_id/fp，比插件现派生的更不容易被风控，因此优先读取。留空自动探测 /opt/gsuid_core/data/GsData.db 与 /root/gsuid_core/data/GsData.db；多个路径用换行分隔。只读打开，不写入、不锁库，不影响 gsuid 运行',
+          component: 'Input',
+          componentProps: {
+            type: 'textarea',
+            rows: 2,
+            placeholder: '/opt/gsuid_core/data/GsData.db',
+          },
+        },
+        {
+          component: 'Divider',
           label: '临时文件清理'
         },
         {

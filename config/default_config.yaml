@@ -105,3 +105,23 @@ auto_sign_theme: ""
 # 留空则撞码只提示、不自动过码。默认沿用 GT-Manual 的公益地址
 # 仅手动 #原神签到 等实时指令生效；定时自动签无人手划，撞码只跳过
 auto_sign_verify_addr: "https://GT.928100.xyz/GTest/register?key=免费开源项目-您如果是交易获得则是被骗-请及时退款并举报"
+
+# ===== 米游币社区任务 =====
+# 与上面的「自动签到」是两回事：签到领原石走游戏 UID + cookie_token；
+# 米游币是社区做任务（版块签到+看帖+点赞+分享）赚币，走米游社账号 + stoken
+# 用户 opt-in 订阅：发 #开启自动米游币 后才纳入每日自动任务
+# 手动：#米游币签到 立即跑一次；#米游币余额 只查余额
+# ⚠️ 需要 stoken（#扫码登录才有），普通 CK 做不了米游币任务
+bbs_coin_enable: true
+# 每日执行时间（cron）。凌晨 00:50
+bbs_coin_cron: "50 0 * * *"
+# 做哪些版块，逗号分隔：gs=原神 sr=星铁 zzz=绝区零
+# 米游币每日上限通常单版块即可拿满；版块越多耗时越长、风控概率略高
+bbs_coin_games: "gs,sr,zzz"
+# 米游币汇总图毛玻璃主题：留空跟随「自动签到主题 / 全部深渊主题」/ light 浅色 / dark 深色
+bbs_coin_theme: ""
+# gsuid_core 数据库路径（可选）。米游币要 stoken，而 gsuid #扫码登录的 stoken 存在它的 GsData.db 里，
+# 且带该账号注册过的真实 device_id/fp，比现派生的更不容易被风控，故优先读它。
+# 留空则自动探测 /opt/gsuid_core/data/GsData.db 与 /root/gsuid_core/data/GsData.db
+# 多个路径用换行或逗号分隔；只读打开，不会写入或锁库
+bbs_coin_gsuid_db: ""
