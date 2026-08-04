@@ -402,9 +402,15 @@ export async function runCoinTask(account, opts = {}) {
   // 1) 先查任务态：已做满直接短路，不发任何任务请求
   const before = picked.missions
   if (!before.ok) {
+    // 这里早退时一条任务请求都没发过，下面按版块的 mark 日志一行都不会有。
+    // 定时场景（log:false + 汇总图无行则不发）会因此彻底静默，看着像「任务根本没跑」，故必须记一笔。
     if (isExpired(before.res)) {
+      log.mark(`[xhh-TL][米游币] ${stuid} 查询任务态失败：stoken 失效`)
       return { ...base, code: 'expired', msg: await expiredMsg(stuid, allCookies) }
     }
+    log.mark(
+      `[xhh-TL][米游币] ${stuid} 查询任务态失败：retcode=${before.res?.retcode} ${before.res?.message || ''}`,
+    )
     return { ...base, code: 'fail', msg: `查询米游币失败：${before.res?.message || '未知错误'}` }
   }
   base.before = before.total

@@ -86,6 +86,15 @@ body {
 }
 .bc-sub .gain { color: #ffc46b; font-weight: 800; font-size: 16px; }
 .bc-sub .warn { color: #ff8f6b; font-weight: 700; }
+/* 一件事都没做时的说明（今日已拿满 / 全部失败），避免三行全 0 被当成故障 */
+.bc-note {
+  margin-top: 6px;
+  font-size: 13px; color: #cbd5e8;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
 .bc-avatars { display: flex; align-items: center; flex-shrink: 0; }
 .bc-avatars .av {
   width: 44px; height: 44px; border-radius: 50%;
@@ -183,6 +192,7 @@ body {
             本次获得 <span class="gain">+{{gained}}</span> 米游币，当前共 {{totalCoin}}
             ，耗时 {{totalCost}}{{if failed}}，<span class="warn">失败 {{failed}}</span>{{/if}}
           </div>
+          {{if note}}<div class="bc-note">ℹ️ {{note}}</div>{{/if}}
         </div>
       </div>
       <div class="bc-avatars">

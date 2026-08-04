@@ -291,6 +291,14 @@ export class autoBbsCoin extends plugin {
       ;(plan[gid] || (plan[gid] = [])).push(qq)
     }
 
+    // task 是 log:false（跑几分钟，不想刷屏 [开始处理]/[完成]），Yunzai 那两行会降级成 debug。
+    // 加上「全失败则不出图」，整条链路可以一行日志都不留，看着就像定时任务压根没触发。
+    // 这一头一尾两条 mark 是排查时唯一能证明「跑过」的锚点，别删。
+    const totalSubs = Object.values(plan).reduce((n, l) => n + l.length, 0)
+    logger?.mark?.(
+      `[xhh-TL][米游币] 定时任务开始：${Object.keys(plan).length} 个群 / ${totalSubs} 位订阅者`,
+    )
+
     for (const gid of Object.keys(plan)) {
       const startTs = Date.now()
       const agg = {
@@ -307,7 +315,10 @@ export class autoBbsCoin extends plugin {
       for (const qq of plan[gid]) {
         try {
           const accounts = await listBbsAccounts(qq, null)
-          if (!accounts.length) continue
+          if (!accounts.length) {
+            logger?.mark?.(`[xhh-TL][米游币] QQ ${qq} 无可用米游社账号，跳过`)
+            continue
+          }
           agg.participants.add(String(qq))
           const results = await this.runAccounts(accounts, games, null)
           for (const r of results) {
@@ -316,6 +327,7 @@ export class autoBbsCoin extends plugin {
               agg.totalCoin += r.after || 0
             } else {
               agg.failed++
+              logger?.mark?.(`[xhh-TL][米游币] ${r.stuid} 失败(${r.code})：${r.msg || '未知'}`)
             }
             for (const row of r.rows || []) {
               const bucket = agg.rows[row.game]
@@ -332,7 +344,10 @@ export class autoBbsCoin extends plugin {
         }
       }
 
-      if (!agg.participants.size) continue
+      if (!agg.participants.size) {
+        logger?.mark?.(`[xhh-TL][米游币] 群 ${gid} 无人有可用账号，跳过`)
+        continue
+      }
 
       try {
         await this.reportGroup(gid, agg, games, this._fmtCost(Date.now() - startTs))
@@ -340,6 +355,8 @@ export class autoBbsCoin extends plugin {
         logger?.error?.(`[xhh-TL][米游币] 群 ${gid} 汇总回报失败: ${err.message}`)
       }
     }
+
+    logger?.mark?.('[xhh-TL][米游币] 定时任务结束')
   }
 
   /**
@@ -367,12 +384,13 @@ export class autoBbsCoin extends plugin {
 
   /** 渲染并发送某群的米游币汇总图 */
   async reportGroup(gid, agg, games, totalCost) {
+    // 配置里开了哪些版块就画哪些行，全 0 的也照画。
+    // 早先会把「一件事没做」的行 continue 掉、行空则整张图不发，
+    // 结果「今日已拿满」和「任务没触发」在群里长得一模一样，只能翻日志分辨。
     const rows = []
     for (const game of games) {
       const b = agg.rows[game]
       if (!b) continue
-      const total = b.signed + b.read + b.vote + b.share
-      if (!total && !b.err) continue
       rows.push({
         name: FORUMS[game].name,
         icon: toFileUrl(path.join(pluginDir, 'resources', GAME_ICON[game])),
@@ -383,7 +401,20 @@ export class autoBbsCoin extends plugin {
         err: b.err,
       })
     }
-    if (!rows.length) return
+    if (!rows.length) {
+      // 只有 bbs_coin_games 配置为空才会走到这，属于配置问题，出图也没内容可画
+      logger?.mark?.(`[xhh-TL][米游币] 群 ${gid} 无可渲染版块（检查 bbs_coin_games）`)
+      return
+    }
+
+    // 一件事都没做时给一句话说明，免得三行全 0 被当成故障
+    const idle = !rows.some((r) => r.signed || r.read || r.vote || r.share)
+    let note = ''
+    if (idle) {
+      note = agg.failed
+        ? '本次未能完成，多为 stoken 失效或撞风控，可发送 #米游币签到 重试'
+        : '今日米游币已拿满，无需重复任务'
+    }
 
     const headerIcons = [...agg.participants]
       .slice(0, 6)
@@ -394,6 +425,7 @@ export class autoBbsCoin extends plugin {
       gained: agg.gained,
       totalCoin: agg.totalCoin,
       failed: agg.failed,
+      note,
       totalCost,
       headerIcons,
     })
@@ -401,14 +433,14 @@ export class autoBbsCoin extends plugin {
     try {
       const group = Bot.pickGroup(Number(gid))
       await group.sendMsg(segment.image(image))
-      logger?.mark?.(`[xhh-TL][米游币] 已发送群 ${gid} 汇总图（+${agg.gained} 币，${rows.length} 个版块）`)
+      logger?.mark?.(`[xhh-TL][米游币] 已发送群 ${gid} 汇总图（+${agg.gained} 币，${rows.length} 个版块${note ? `，${note}` : ''}）`)
     } catch (err) {
       logger?.error?.(`[xhh-TL][米游币] 群 ${gid} 汇总图发送失败: ${err.message}`)
     }
   }
 
   /** 组装 renderData 并出图；定时场景借 Runtime 拿 render 能力 */
-  async renderSummary({ rows, gained, totalCoin, failed, totalCost, headerIcons }) {
+  async renderSummary({ rows, gained, totalCoin, failed, note, totalCost, headerIcons }) {
     const cfg = config()
     // 主题优先级：米游币 → 自动签到 → 角色持有率 → 全部深渊 → 浅色
     const themeRaw = String(
@@ -430,6 +462,7 @@ export class autoBbsCoin extends plugin {
       gained,
       totalCoin,
       failed,
+      note,
       totalCost,
       rows,
       generatedAt: moment().format('MM-DD HH:mm'),
