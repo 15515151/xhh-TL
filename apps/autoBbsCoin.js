@@ -344,11 +344,6 @@ export class autoBbsCoin extends plugin {
         }
       }
 
-      if (!agg.participants.size) {
-        logger?.mark?.(`[xhh-TL][米游币] 群 ${gid} 无人有可用账号，跳过`)
-        continue
-      }
-
       try {
         await this.reportGroup(gid, agg, games, this._fmtCost(Date.now() - startTs))
       } catch (err) {
@@ -402,18 +397,23 @@ export class autoBbsCoin extends plugin {
       })
     }
     if (!rows.length) {
-      // 只有 bbs_coin_games 配置为空才会走到这，属于配置问题，出图也没内容可画
-      logger?.mark?.(`[xhh-TL][米游币] 群 ${gid} 无可渲染版块（检查 bbs_coin_games）`)
-      return
+      // bbs_coin_games 配置为空或所有订阅者均无可用账号，仍然出图说明情况
+      logger?.mark?.(`[xhh-TL][米游币] 群 ${gid} 无可渲染版块，仍发空图`)
     }
 
     // 一件事都没做时给一句话说明，免得三行全 0 被当成故障
-    const idle = !rows.some((r) => r.signed || r.read || r.vote || r.share)
     let note = ''
-    if (idle) {
-      note = agg.failed
-        ? '本次未能完成，多为 stoken 失效或撞风控，可发送 #米游币签到 重试'
-        : '今日米游币已拿满，无需重复任务'
+    if (!agg.participants.size) {
+      note = '本群无可用米游社账号，请发送 #扫码登录 绑定'
+    } else if (!rows.length) {
+      note = '无可渲染版块，请检查 bbs_coin_games 配置'
+    } else {
+      const idle = !rows.some((r) => r.signed || r.read || r.vote || r.share)
+      if (idle) {
+        note = agg.failed
+          ? '本次未能完成，多为 stoken 失效或撞风控，可发送 #米游币签到 重试'
+          : '今日米游币已拿满，无需重复任务'
+      }
     }
 
     const headerIcons = [...agg.participants]
