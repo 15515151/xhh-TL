@@ -150,7 +150,7 @@ export class autoBbsCoin extends plugin {
     const accounts = await listBbsAccounts(e.user_id, e)
     if (!accounts.length) {
       e.reply(
-        '你还没有可用的米游社 stoken，请先【#扫码登录】米游社后再开启自动米游币~\n（米游币任务需要 stoken，普通 CK 不行）',
+        '没有可用的米游社账号，请先【#扫码登录】~',
         true,
       )
       return true
@@ -206,7 +206,7 @@ export class autoBbsCoin extends plugin {
     if (this._groupOnly(e)) return true
     const accounts = await listBbsAccounts(e.user_id, e)
     if (!accounts.length) {
-      e.reply('你还没有可用的米游社 stoken，请先【#扫码登录】米游社~', true)
+      e.reply('没有可用的米游社账号，请先【#扫码登录】~', true)
       return true
     }
     const lines = ['💰 米游币余额：']
@@ -230,7 +230,7 @@ export class autoBbsCoin extends plugin {
     const accounts = await listBbsAccounts(e.user_id, e)
     if (!accounts.length) {
       e.reply(
-        '你还没有可用的米游社 stoken，请先【#扫码登录】米游社~\n（米游币任务需要 stoken，普通 CK 不行）',
+        '没有可用的米游社账号，请先【#扫码登录】~',
         true,
       )
       return true
@@ -238,7 +238,7 @@ export class autoBbsCoin extends plugin {
 
     const games = resolveGames()
     e.reply(
-      `开始米游币任务：${accounts.length} 个账号 × ${games.length} 个版块，预计 ${accounts.length * games.length} 分钟内完成，请稍候~`,
+      `开始米游币任务：${accounts.length} 个账号 × ${games.length} 个版块，预计 ${this._estimate(accounts.length, games.length)}内完成，请稍候~`,
       true,
     )
 
@@ -340,6 +340,16 @@ export class autoBbsCoin extends plugin {
         logger?.error?.(`[xhh-TL][米游币] 群 ${gid} 汇总回报失败: ${err.message}`)
       }
     }
+  }
+
+  /**
+   * 预估耗时。每版块约 13 次请求（签到1+列表1+看帖5+点赞5+分享1），请求间 jitter 均值 2 秒；
+   * 另有每账号查询/复查各 1 次、账号间 3 秒间隔。
+   * 原来按「账号×版块=分钟数」报，3 版块说 3 分钟、实测 1 分 28 秒，偏保守一倍。
+   */
+  _estimate(accountCount, gameCount) {
+    const seconds = accountCount * (gameCount * 13 * 2 + 2 * 2 + 3)
+    return this._fmtCost(seconds * 1000)
   }
 
   /** 毫秒 → “X小时Y分Z秒” */

@@ -144,12 +144,15 @@ function jitter(min = 1000, max = 3000) {
   return sleep(min + Math.floor(Math.random() * (max - min)))
 }
 
-async function req(url, { cookie, device, deviceFp, body = null, query = '' }) {
+/**
+ * DS 走 GET 式（md5(salt&t&r)），DS2 走 POST 式（额外带 b=<body>&q=<query>）。
+ * 本模块的 GET 接口把参数直接拼在 URL 上、DS 不参与签名，故这里只有 POST 需要 body。
+ */
+async function req(url, { cookie, device, deviceFp, body = null }) {
   const isPost = body !== null
   const bodyStr = isPost ? JSON.stringify(body) : ''
   const headers = buildHeaders(cookie, device, deviceFp, {
     ds2Body: isPost ? bodyStr : null,
-    ds2Query: query,
   })
   const param = { method: isPost ? 'POST' : 'GET', headers, timeout: 12000 }
   if (isPost) {
@@ -205,7 +208,6 @@ async function getPostList(cookie, device, deviceFp, forumId) {
     cookie,
     device,
     deviceFp,
-    query,
   })
   const list = res?.data?.list || []
   return list.map((x) => x?.post?.post_id).filter(Boolean)
@@ -213,8 +215,7 @@ async function getPostList(cookie, device, deviceFp, forumId) {
 
 /** 浏览帖子 */
 async function readPost(cookie, device, deviceFp, postId) {
-  const query = `post_id=${postId}`
-  return req(`${BBS_HOST}/post/api/getPostFull?${query}`, { cookie, device, deviceFp, query })
+  return req(`${BBS_HOST}/post/api/getPostFull?post_id=${postId}`, { cookie, device, deviceFp })
 }
 
 /** 点赞 */
@@ -229,12 +230,10 @@ async function votePost(cookie, device, deviceFp, postId) {
 
 /** 分享 */
 async function sharePost(cookie, device, deviceFp, postId) {
-  const query = `entity_id=${postId}&entity_type=1`
-  return req(`${BBS_HOST}/apihub/api/getShareConf?${query}`, {
+  return req(`${BBS_HOST}/apihub/api/getShareConf?entity_id=${postId}&entity_type=1`, {
     cookie,
     device,
     deviceFp,
-    query,
   })
 }
 
@@ -312,20 +311,43 @@ async function pickLiveCredential(account) {
  * bbs 拒了之后，再问一次 passport，用来区分两种完全不同的失败：
  *
  *   passport 也拒 → stoken 本体过期，重新扫码就能修
- *   passport 却通 → stoken 是活的，但作用域不对。实测游戏扫码（app_id=2 →
- *                   getTokenByGameToken）签出的 stoken 能换 cookie_token、能查体力，
- *                   社区接口一律 -100。这种情况重扫同一个游戏二维码没用，得走米游社 App 的码。
+ *   passport 却通 → stoken 是活的，但作用域不对。作用域由建码时的 x-rpc-app_id 决定：
+ *                   ddxf5dufpuyo（HYP 启动器）/ app_id=2（游戏码）签出的 stoken 能换
+ *                   cookie_token、能查体力，社区接口一律 -100；只有 bll8iq97cem8
+ *                   （米游社 App，xiaoyao-cvs-plugin 走的就是这个）才带社区作用域。
+ *                   2026-08 实测：TRSS-Plugin 抢走 #扫码登录 用的是前者，故米游币全灭；
+ *                   移除后落回 xiaoyao 重扫即恢复。
  *
  * 两者提示语不同，否则用户会反复扫同一个码。查询失败不影响判定，按「过期」保守处理。
+ *
+ * 接口按 stoken 版本分流，混用会让复核恒失败：
+ *   v1（stoken=...）  : api-takumi /auth/api/getCookieAccountInfoBySToken?stoken=&uid=
+ *   v2（stoken=v2_...）: passport-api /account/auth/api/getCookieAccountInfoBySToken?stoken=&mid=
+ *                       且要带 x-rpc-app_id: bll8iq97cem8，否则不认。
+ * 实测（2026-08）拿 v2 stoken 去问 v1 接口一律 -100，与其死活无关——同一把 stoken 换
+ * v2 姿势问就是 retcode=0。现在扫码签出的清一色 v2，早先只走 v1 接口时这函数恒 false，
+ * 于是「作用域不对」被兜底成「已过期」，用户反复扫码也修不好。
  */
 async function stokenLiveAtPassport(stuid, cookie) {
   const stoken = cookiePart(cookie, 'stoken')
   if (!stuid || !stoken) return false
+  const isV2 = stoken.startsWith('v2_')
+  const mid = cookiePart(cookie, 'mid')
+  // v2 的复核接口以 mid 定位账号，没 mid 问不了，只能按未知处理
+  if (isV2 && !mid) return false
+  const url = isV2
+    ? `https://passport-api.mihoyo.com/account/auth/api/getCookieAccountInfoBySToken?stoken=${encodeURIComponent(stoken)}&mid=${encodeURIComponent(mid)}`
+    : `https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken?stoken=${encodeURIComponent(stoken)}&uid=${encodeURIComponent(stuid)}`
+  const headers = isV2
+    ? {
+        Cookie: cookie,
+        'x-rpc-app_id': 'bll8iq97cem8',
+        'x-rpc-client_type': '2',
+        'x-rpc-app_version': APP_VERSION,
+      }
+    : {}
   try {
-    const res = await fetch(
-      `https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken?stoken=${encodeURIComponent(stoken)}&uid=${encodeURIComponent(stuid)}`,
-      { timeout: 10000 },
-    )
+    const res = await fetch(url, { headers, timeout: 10000 })
     if (!res.ok) return false
     const j = await res.json()
     return Number(j?.retcode) === 0
@@ -335,10 +357,18 @@ async function stokenLiveAtPassport(stuid, cookie) {
   }
 }
 
-/** 按 passport 复核结果给出对应话术 */
-async function expiredMsg(stuid, cookie) {
-  if (await stokenLiveAtPassport(stuid, cookie)) {
-    return 'stoken 有效但社区接口不认（游戏扫码签出的没有社区权限），请【#刷新ck】，仍不行则用米游社 App 的码【#扫码登录】'
+/**
+ * 按 passport 复核结果给出对应话术。
+ * 传候选列表而非单份：一个 stuid 可能同时有 yaml / gsuid 两份 stoken，只要有一份在
+ * passport 是活的，问题就是「社区作用域」而不是「过期」——按单份（且是最后一个失败的
+ * 那份）判会把这种情况错报成过期。
+ */
+async function expiredMsg(stuid, cookies) {
+  const list = (Array.isArray(cookies) ? cookies : [cookies]).filter(Boolean)
+  for (const ck of list) {
+    if (await stokenLiveAtPassport(stuid, ck)) {
+      return '当前 stoken 不支持米游币，请重新【#扫码登录】'
+    }
   }
   return 'stoken 已过期，请【#扫码登录】'
 }
@@ -366,17 +396,24 @@ export async function runCoinTask(account, opts = {}) {
   const device = picked.device
   const deviceFp = device.fp
   const cookie = picked.cand.cookie
+  // 失败话术要按「名下所有候选」复核，不能只看最后一个失败的那份
+  const allCookies = accountCandidates(account).map((c) => c.cookie)
 
   // 1) 先查任务态：已做满直接短路，不发任何任务请求
   const before = picked.missions
   if (!before.ok) {
     if (isExpired(before.res)) {
-      return { ...base, code: 'expired', msg: await expiredMsg(stuid, cookie) }
+      return { ...base, code: 'expired', msg: await expiredMsg(stuid, allCookies) }
     }
     return { ...base, code: 'fail', msg: `查询米游币失败：${before.res?.message || '未知错误'}` }
   }
   base.before = before.total
   base.after = before.total
+  // states 里带各子任务的完成度，本可用来跳过今天已做满的看帖/点赞/分享（现在是无脑全做）。
+  // 要按它短路得先确认 mission_key 的真实取值，猜错会漏做任务，故先只记录不使用。
+  log.debug(
+    `[xhh-TL][米游币] ${stuid} states: ${JSON.stringify(before.states)}`,
+  )
   if (before.canGet === 0) {
     return {
       ...base,
@@ -386,6 +423,8 @@ export async function runCoinTask(account, opts = {}) {
   }
 
   // 2) 逐版块做任务
+  // 中途 stoken 失效要区别于「跑完了但没赚到」——否则上层只看 code 会报成 “+0 币”
+  let diedMidway = false
   for (const game of games) {
     const forum = FORUMS[game]
     if (!forum) continue
@@ -409,6 +448,7 @@ export async function runCoinTask(account, opts = {}) {
       if (isExpired(signRes)) {
         row.err = 'stoken 失效'
         base.rows.push(row)
+        diedMidway = true
         break
       }
       // -5003 = 今日该版块已签过，算完成但标记出来，避免看着像刚签的
@@ -444,7 +484,7 @@ export async function runCoinTask(account, opts = {}) {
         await jitter()
       }
 
-      // 2.5 分享
+      // 2.5 分享（官方日上限就 1 次，循环只是与上面写法保持一致）
       for (const postId of postIds.slice(0, NEED_SHARE)) {
         const res = await sharePost(cookie, device, deviceFp, postId)
         if (Number(res?.retcode) === 0) row.share++
@@ -462,6 +502,10 @@ export async function runCoinTask(account, opts = {}) {
   }
 
   // 3) 复查余额，算增量
+  // 中途失效就不复查了：这一发必然也是 -100，白白多一次请求
+  if (diedMidway) {
+    return { ...base, code: 'expired', msg: await expiredMsg(stuid, allCookies) }
+  }
   const after = await queryMissions(cookie, device, deviceFp)
   if (after.ok) {
     base.after = after.total
@@ -479,12 +523,12 @@ export async function runCoinTask(account, opts = {}) {
 export async function queryCoin(account) {
   const { stuid, cookie } = account
   if (!stuid || !cookie) return { ok: false, msg: '缺少 stoken' }
-  const { cand, missions: r } = await pickLiveCredential(account)
+  const { missions: r } = await pickLiveCredential(account)
   if (!r.ok) {
     return {
       ok: false,
       msg: isExpired(r.res)
-        ? await expiredMsg(stuid, cand.cookie)
+        ? await expiredMsg(stuid, accountCandidates(account).map((c) => c.cookie))
         : `查询失败：${r.res?.message || '未知错误'}`,
     }
   }
