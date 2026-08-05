@@ -481,7 +481,7 @@ function collectAvatarIds(...idLists) {
 export class gsAllAbyss extends plugin {
   constructor() {
     super({
-      name: '[小花火]原神全部深渊',
+      name: '[小火花]原神全部深渊',
       dsc: '原神深渊+危战+小剧诗三合一',
       event: 'message',
       // 高于星铁 *全部深渊，优先吃掉 #全部深渊

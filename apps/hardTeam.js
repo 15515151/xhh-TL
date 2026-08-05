@@ -179,7 +179,7 @@ function buildSections(ret, avatarMap) {
 export class hardTeam extends plugin {
   constructor() {
     super({
-      name: '[小花火]原神危战配队',
+      name: '[小火花]原神危战配队',
       dsc: '幽境危战配队建议（提瓦特小助手数据 + 本人练度）',
       event: 'message',
       priority: config().hard_team_priority ?? -98,

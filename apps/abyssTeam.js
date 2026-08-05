@@ -224,7 +224,7 @@ function buildFloors(ret, avatarMap) {
 export class abyssTeam extends plugin {
   constructor() {
     super({
-      name: '[小花火]原神深渊配队',
+      name: '[小火花]原神深渊配队',
       dsc: '原神深渊配队建议（提瓦特小助手数据 + 本人练度）',
       event: 'message',
       priority: config().abyss_team_priority ?? -98,

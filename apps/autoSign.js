@@ -91,7 +91,7 @@ export class autoSign extends plugin {
     const cron = cfg.auto_sign_cron || DEFAULT_CRON
 
     super({
-      name: '[小花火]米游社自动签到',
+      name: '[小火花]米游社自动签到',
       dsc: '原神/星铁/绝区零 每日自动签到',
       event: 'message',
       priority: -Infinity,

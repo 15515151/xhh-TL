@@ -131,7 +131,7 @@ export class resinPush extends plugin {
     const cron = cfg.resin_push_cron || DEFAULT_CRON
 
     super({
-      name: '[小花火]体力阈值推送',
+      name: '[小火花]体力阈值推送',
       dsc: '体力达到阈值自动@提醒',
       event: 'message',
       priority: -Infinity,

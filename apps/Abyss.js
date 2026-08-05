@@ -5,7 +5,7 @@ import { config } from '../utils/pluginConfig.js'
 export class Abyss extends plugin {
   constructor(e) {
     super({
-      name: '[小花火]深渊小组件',
+      name: '[小火花]深渊小组件',
       dsc: '星铁全部深渊',
       event: 'message',
       priority: config().abyss_priority ?? -98,

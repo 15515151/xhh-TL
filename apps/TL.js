@@ -204,7 +204,7 @@ function getTime(time) {
 export class TL extends plugin {
   constructor(e) {
     super({
-      name: '[小花火]体力小组件',
+      name: '[小火花]体力小组件',
       dsc: '体力',
       event: 'message',
       priority: config().tl_priority ?? -99,
@@ -216,7 +216,7 @@ export class TL extends plugin {
           fnc: 'note_',
         },
         {
-          reg: '^\\s*#?(?:体力插件|小花火体力)(?:强制)?更新\\s*$',
+          reg: '^\\s*#?(?:体力插件|小火花体力|小花火体力)(?:强制)?更新\\s*$',
           fnc: 'updatePlugin',
         },
         {
@@ -407,7 +407,7 @@ export class TL extends plugin {
   async renderTlImage(e, data, renderScale) {
     const ppath = '../../../../../plugins/xhh-TL/resources/';
     const tplFile = pluginDir + '/resources/Tl/Tl.html';
-    const renderResult = await e.runtime.render('小花火', 'Tl/Tl', data, {
+    const renderResult = await e.runtime.render('小火花', 'Tl/Tl', data, {
       retType: 'base64',
       imgType: 'png',
       beforeRender() {
@@ -1023,7 +1023,7 @@ export class TL extends plugin {
     const tplFile = pluginDir + '/resources/Tl/Portrait.html';
     const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
 
-    const renderResult = await e.runtime.render('小花火', 'Tl/Portrait', renderData, {
+    const renderResult = await e.runtime.render('小火花', 'Tl/Portrait', renderData, {
       retType: 'base64',
       imgType: 'png',
       beforeRender({ data }) {
@@ -1066,7 +1066,7 @@ export class TL extends plugin {
     const tplFile = pluginDir + '/resources/Tl/Widget.html';
     const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
 
-    const renderResult = await e.runtime.render('小花火', 'Tl/Widget', renderData, {
+    const renderResult = await e.runtime.render('小火花', 'Tl/Widget', renderData, {
       retType: 'base64',
       imgType: 'png',
       beforeRender({ data }) {

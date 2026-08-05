@@ -64,7 +64,7 @@ function buildGroups(data, ownedIds) {
 export class holdRate extends plugin {
   constructor() {
     super({
-      name: '[小花火]原神角色持有率',
+      name: '[小火花]原神角色持有率',
       dsc: '原神角色持有率（提瓦特小助手深渊统计）',
       event: 'message',
       priority: config().hold_rate_priority ?? -98,

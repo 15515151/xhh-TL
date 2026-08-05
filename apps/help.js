@@ -1,5 +1,5 @@
 /**
- * #小火花帮助 / #小花火帮助 — 指令总览图
+ * #小火花帮助 — 指令总览图
  * 图标使用本插件 resources/help/icons 内独立角色/游戏图（原神用原神角色，星铁用星铁角色）
  */
 import path from 'path'
@@ -113,7 +113,7 @@ export function buildHelpGroups() {
         },
         {
           icon: 'plugin.webp',
-          title: '#体力插件更新 #小花火体力更新',
+          title: '#体力插件更新 #小火花体力更新',
           desc: '拉取插件更新；加「强制」放弃本地修改',
         },
       ],
@@ -322,12 +322,12 @@ export function buildHelpGroups() {
       list: [
         {
           icon: 'spark.webp',
-          title: '#小火花帮助 #小花火帮助',
+          title: '#小火花帮助',
           desc: '显示本指令总览图',
         },
         {
           icon: 'active.webp',
-          title: '#清理临时文件 #小花火清理tmp',
+          title: '#清理临时文件 #小火花清理tmp',
           desc: '主人：清理 data/tmp（加「全部」清空）',
         },
         {
@@ -343,13 +343,13 @@ export function buildHelpGroups() {
 export class help extends plugin {
   constructor() {
     super({
-      name: '[小花火]帮助',
-      dsc: '小火花/小花火 指令帮助图',
+      name: '[小火花]帮助',
+      dsc: '小火花 指令帮助图',
       event: 'message',
       priority: 500,
       rule: [
         {
-          // #小火花帮助 / #小花火帮助 / #xhh帮助 / #xhh-TL帮助 / 小火花菜单 / #xhh help …
+          // #小火花帮助 / #xhh帮助 / #xhh-TL帮助 / 小火花菜单 / #xhh help …（小花火 为旧别名，保留兼容）
           reg: '^\\s*#?(?:小火花|小花火|xhh-?TL|xhh)(?:插件)?\\s*(?:命令|帮助|菜单|help|说明|功能|指令|使用说明)\\s*$',
           fnc: 'help',
         },

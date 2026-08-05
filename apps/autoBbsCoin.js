@@ -94,7 +94,7 @@ export class autoBbsCoin extends plugin {
     const cron = cfg.bbs_coin_cron || DEFAULT_CRON
 
     super({
-      name: '[小花火]米游币社区任务',
+      name: '[小火花]米游币社区任务',
       dsc: '原神/星铁/绝区零 版块签到+看帖+点赞+分享，每日自动赚米游币',
       event: 'message',
       priority: -Infinity,

@@ -2137,7 +2137,7 @@ async function listPeriods(game, channel = 'live') {
 export class nanokaAbyss extends plugin {
   constructor() {
     super({
-      name: '[小花火]Nanoka版本深渊',
+      name: '[小火花]Nanoka版本深渊',
       dsc: 'Nanoka 原神/星铁版本深渊与挑战查询',
       event: 'message',
       priority: (cfg().abyss_priority ?? -98) + 1,

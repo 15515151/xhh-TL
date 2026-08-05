@@ -93,8 +93,8 @@ export class TmpCleaner extends plugin {
       priority: 5000,
       rule: [
         {
-          // #清理临时文件 / #小花火清理tmp / 清理缓存；尾部多余字不触发
-          reg: '^\\s*#?(?:体力插件|小花火|xhh-?TL)?(?:清理|清除)(?:临时|缓存|tmp)(?:文件|目录)?(?:全部)?\\s*$',
+          // #清理临时文件 / #小火花清理tmp / 清理缓存；尾部多余字不触发（小花火 为旧别名，保留兼容）
+          reg: '^\\s*#?(?:体力插件|小火花|小花火|xhh-?TL)?(?:清理|清除)(?:临时|缓存|tmp)(?:文件|目录)?(?:全部)?\\s*$',
           fnc: 'manualClean',
           permission: 'master',
         },

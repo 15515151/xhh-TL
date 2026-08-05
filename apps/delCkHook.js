@@ -41,7 +41,7 @@ function findStokenByStuid(yamlData, stuid) {
 export class TLDelCkHook extends plugin {
   constructor() {
     super({
-      name: '[小花火]删除ck对账',
+      name: '[小火花]删除ck对账',
       dsc: '记录被 #删除ck 移除的账号，避免其残留 stoken 复活体力查询',
       event: 'message',
       // 必须小于 genshin 用户绑定插件的 priority(300)，确保本钩子先跑、先取快照

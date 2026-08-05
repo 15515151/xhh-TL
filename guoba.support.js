@@ -16,7 +16,7 @@ export function supportGuoba() {
   return {
     pluginInfo: {
       name: 'xhh-TL',
-      title: '小花火体力小组件',
+      title: '小火花体力小组件',
       author: '@cchanlan',
       authorLink: 'https://github.com/cchanlan',
       link: 'https://github.com/cchanlan/xhh-TL',

@@ -195,7 +195,7 @@ async function loadRoleCombat(month) {
 export class role_combat extends plugin {
   constructor() {
     super({
-      name: '[小花火]幻想真境剧诗',
+      name: '[小火花]幻想真境剧诗',
       dsc: '原神幻想真境剧诗当期可用角色',
       event: 'message',
       priority: -9999,

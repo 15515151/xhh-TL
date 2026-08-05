@@ -175,7 +175,7 @@ function getVal(obj, pathStr) {
 export class miniRoleCombat extends plugin {
   constructor() {
     super({
-      name: '[小花火]小剧诗',
+      name: '[小火花]小剧诗',
       dsc: '幻想真境剧诗关键关卡通关速览',
       event: 'message',
       priority: -9998,

@@ -1,7 +1,7 @@
 {
   "name": "xhh-TL",
   "version": "1.0.0",
-  "description": "小花火体力小组件 - 原神/星铁/绝区零体力查询 + 全部深渊与幻想剧诗",
+  "description": "小火花体力小组件 - 原神/星铁/绝区零体力查询 + 全部深渊与幻想剧诗",
   "type": "module",
   "main": "index.js",
   "dependencies": {

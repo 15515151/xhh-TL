@@ -348,7 +348,7 @@ strong {
   color: #51b7b7;
 }
 
-/* 顶部游戏列表限制在左侧，避免标签被右上角小花火遮挡 */
+/* 顶部游戏列表限制在左侧，避免标签被右上角小火花遮挡 */
 .zi_ .game-tags {
   position: relative;
   z-index: 2;
