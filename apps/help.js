@@ -113,7 +113,7 @@ export function buildHelpGroups() {
         },
         {
           icon: 'plugin.webp',
-          title: '#体力插件更新 #小火花体力更新',
+          title: '#体力插件更新 #小火花更新 #更新小火花',
           desc: '拉取插件更新；加「强制」放弃本地修改',
         },
       ],
@@ -349,8 +349,8 @@ export class help extends plugin {
       priority: 500,
       rule: [
         {
-          // #小火花帮助 / #xhh帮助 / #xhh-TL帮助 / 小火花菜单 / #xhh help …（小花火 为旧别名，保留兼容）
-          reg: '^\\s*#?(?:小火花|小花火|xhh-?TL|xhh)(?:插件)?\\s*(?:命令|帮助|菜单|help|说明|功能|指令|使用说明)\\s*$',
+          // #小火花帮助 / #xhh帮助 / #xhh-TL帮助 / 小火花菜单 / #xhh help …
+          reg: '^\\s*#?(?:小火花|xhh-?TL|xhh)(?:插件)?\\s*(?:命令|帮助|菜单|help|说明|功能|指令|使用说明)\\s*$',
           fnc: 'help',
         },
       ],
