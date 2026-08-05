@@ -26,6 +26,35 @@ import { replyProgress, replyQuote } from '../utils/replyHelper.js'
 const MANIFEST_URL = 'https://static.nanoka.cc/manifest.json'
 const STATIC = 'https://static.nanoka.cc'
 
+// ---------------- 幽境危战：lunaris.moe 数据源 ----------------
+// 期数 JSON 挂在站点同源：https://gi.lunaris.moe/data/leylinechallenge/{scheduleId}.json
+// 静态资源（怪物立绘 / 元素图标 / SPRITE_PRESET）在 api.lunaris.moe
+const LUNA_SITE = 'https://gi.lunaris.moe'
+const LUNA_LEYLINE = `${LUNA_SITE}/data/leylinechallenge`
+const LUNA_ASSETS = 'https://api.lunaris.moe/data/assets'
+// 站点内置期数列表（bundle 里硬编码），运行时再向上探测新期
+const LUNA_BASE_IDS = [
+  5269001, 5269002, 5269003, 5269004, 5269005, 5269006, 5269007, 5269008, 5269009, 5269010,
+  5269011,
+]
+// 站点只展示 monsterLevel >= 90 的难度，难度号 = 过滤后下标 + 3
+const LUNA_MIN_MONSTER_LEVEL = 90
+const LUNA_DIFF_BASE = 3
+// 用户要求：只要难度 5
+const LUNA_WANT_DIFF = 5
+
+/** 抗性字段 → 元素展示（顺序与站点一致） */
+const LUNA_RESIST = [
+  { key: 'fireSubHurt', cls: 'pyro', name: '火' },
+  { key: 'waterSubHurt', cls: 'hydro', name: '水' },
+  { key: 'grassSubHurt', cls: 'dendro', name: '草' },
+  { key: 'elecSubHurt', cls: 'electro', name: '雷' },
+  { key: 'windSubHurt', cls: 'anemo', name: '风' },
+  { key: 'iceSubHurt', cls: 'cryo', name: '冰' },
+  { key: 'rockSubHurt', cls: 'geo', name: '岩' },
+  { key: 'physicalSubHurt', cls: 'physical', name: '物理' },
+]
+
 /**
  * 图标名 → 候选 URL
  * 注意：upload-bbs.miyoushe.com 对不存在资源会返回「灰白占位图」(HTTP 200)，
@@ -696,15 +725,340 @@ async function loadGiRoleCombat(offset = 0, channel = 'live') {
   }
 }
 
+// ---------------- 幽境危战：lunaris 取数 / 渲染数据 ----------------
+
+/** 期数元信息（id / 起止 / 版本号）缓存，6h */
+const lunaMetaCache = new Map()
+const LUNA_META_TTL = 6 * 3600 * 1000
+/** 期数完整 JSON 缓存（单份 ~300KB，最多留 3 份），1h */
+const lunaDetailCache = new Map()
+const LUNA_DETAIL_TTL = 3600 * 1000
+
+/** 抓文本（支持 Range，用来只取 JSON 头尾省流量） */
+async function lunaFetchText(url, range = '', timeout = 15000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  try {
+    const headers = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      Referer: `${LUNA_SITE}/leyline`,
+      Accept: 'application/json,text/plain,*/*',
+    }
+    if (range) headers.Range = `bytes=${range}`
+    const res = await fetch(url, { signal: controller.signal, headers })
+    if (!res.ok && res.status !== 206) return null
+    // SPA fallback（不存在的期数返回 index.html，HTTP 200）
+    const ct = String(res.headers.get('content-type') || '')
+    if (/text\/html/i.test(ct)) return null
+    return await res.text()
+  } catch (_) {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
- * 幽境危战 = Nanoka leyline（https://gi.nanoka.cc/leyline）
- * 展示「无畏 + 绝境」两档最高难度的 3 强敌 + 机制
- * （无畏 / 绝境 boss 名可能相同，但机制/词条往往不同，一并展示）
+ * 只取 JSON 头 400B + 尾 400B，解析期数元信息
+ * 头部含 scheduleId / scheduleStartTime / scheduleEndTime，尾部含 challengeName
+ */
+async function lunaFetchMeta(id) {
+  const hit = lunaMetaCache.get(String(id))
+  if (hit && Date.now() - hit.at < LUNA_META_TTL) return hit.data
+  const url = `${LUNA_LEYLINE}/${id}.json`
+  const head = await lunaFetchText(url, '0-500')
+  if (!head || !/"scheduleId"/.test(head)) {
+    lunaMetaCache.set(String(id), { at: Date.now(), data: null })
+    return null
+  }
+  const pick = (re, s) => {
+    const m = String(s || '').match(re)
+    return m ? m[1] : ''
+  }
+  const tail = await lunaFetchText(url, '-500')
+  const data = {
+    id: String(id),
+    begin: pick(/"scheduleStartTime"\s*:\s*"([^"]+)"/, head),
+    end: pick(/"scheduleEndTime"\s*:\s*"([^"]+)"/, head),
+    // challengeName 在文件末尾；Range 不生效时兜底空串
+    challengeName: pick(/"challengeName"\s*:\s*"([^"]*)"/, tail),
+  }
+  data._begin = data.begin
+  data._end = data.end
+  lunaMetaCache.set(String(id), { at: Date.now(), data })
+  return data
+}
+
+/** 期数列表：内置 id + 向上探测新期，按 id 升序（= 时间顺序） */
+async function lunaListSchedules() {
+  const metas = await Promise.all(LUNA_BASE_IDS.map((id) => lunaFetchMeta(id)))
+  const list = metas.filter(Boolean)
+  // 向上探测：连续 2 个不存在即停，最多探 24 期
+  let miss = 0
+  let id = (LUNA_BASE_IDS.at(-1) || 5269011) + 1
+  for (let i = 0; i < 24 && miss < 2; i++, id++) {
+    const meta = await lunaFetchMeta(id)
+    if (meta) {
+      list.push(meta)
+      miss = 0
+    } else {
+      miss++
+    }
+  }
+  list.sort((a, b) => Number(a.id) - Number(b.id))
+  if (!list.length) throw new Error('lunaris 幽境危战期数列表为空')
+  return list
+}
+
+/** 当期下标：时间命中优先（重叠取 id 最大），否则取最后一个已开始的 */
+function lunaLiveIndex(list) {
+  const now = moment()
+  let active = -1
+  let started = -1
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i].begin ? moment(list[i].begin) : null
+    const e = list[i].end ? moment(list[i].end) : null
+    if (b?.isValid() && !b.isAfter(now)) started = i
+    if (b?.isValid() && e?.isValid() && !b.isAfter(now) && !e.isBefore(now)) active = i
+  }
+  if (active >= 0) return active
+  if (started >= 0) return started
+  return list.length - 1
+}
+
+/** 期数定位：channel=live 取当期；latest 取下一期（没有则退当期并给提示） */
+function lunaResolveIndex(list, channel = 'live', offset = 0) {
+  // 不依赖日期：列表末尾即最新一期（下期），倒数第二期为当期
+  const lastIdx = list.length - 1
+  let baseIdx = channel === 'latest' ? lastIdx : lastIdx - 1
+  let note = ''
+  if (baseIdx < 0) {
+    baseIdx = Math.max(0, lastIdx)
+    if (channel !== 'latest') note = '仅有一期数据，已展示最新一期'
+  }
+  const idx = Math.max(0, baseIdx - Math.max(0, offset))
+  return { idx, baseIdx, offset: baseIdx - idx, total: list.length, note }
+}
+
+/** 完整期数 JSON */
+async function lunaFetchDetail(id) {
+  const key = String(id)
+  const hit = lunaDetailCache.get(key)
+  if (hit && Date.now() - hit.at < LUNA_DETAIL_TTL) return hit.data
+  const text = await lunaFetchText(`${LUNA_LEYLINE}/${id}.json`, '', 25000)
+  if (!text) throw new Error(`幽境危战第 ${id} 期数据不可用`)
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch (_) {
+    throw new Error(`幽境危战第 ${id} 期数据解析失败`)
+  }
+  if (lunaDetailCache.size >= 3) {
+    lunaDetailCache.delete(lunaDetailCache.keys().next().value)
+  }
+  lunaDetailCache.set(key, { at: Date.now(), data })
+  return data
+}
+
+function escapeHtml(s = '') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * 米哈游富文本 → HTML
+ * <color=#RRGGBBAA>xx</color> → 带色加粗 span；\n → <br>
+ */
+function lunaRichText(s = '') {
+  const raw = String(s || '').replace(/\\n/g, '\n')
+  if (!raw) return ''
+  const parts = raw.split(/(<color=#[A-Fa-f0-9]{6,8}>[\s\S]*?<\/color>)/gi)
+  return parts
+    .map((seg) => {
+      if (!seg) return ''
+      const m = seg.match(/^<color=(#[A-Fa-f0-9]{6,8})>([\s\S]*?)<\/color>$/i)
+      if (m) {
+        // #RRGGBBAA → #RRGGBB（浏览器支持 8 位，但统一裁掉更稳）
+        const color = m[1].length === 9 ? m[1].slice(0, 7) : m[1]
+        return `<span class="ley-hl" style="color:${color}">${escapeHtml(m[2])}</span>`
+      }
+      return escapeHtml(seg)
+    })
+    .join('')
+    .replace(/\n/g, '<br>')
+}
+
+/** 10748446 → 10.748.446（与站点 pt-BR 一致） */
+function lunaFormatHp(hp) {
+  const n = Math.round(Number(hp) || 0)
+  if (!n) return '-'
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+/** lunaris 静态资源 → dataURI（缓存，失败返回空串） */
+const lunaAssetCache = new Map()
+async function lunaAssetToDataUri(url, { size = 64, fit = 'contain' } = {}) {
+  if (!url) return ''
+  const key = `${url}|${size}|${fit}`
+  if (lunaAssetCache.has(key)) return lunaAssetCache.get(key)
+  let uri = ''
+  try {
+    const buf = await fetchIconBuffer(url)
+    if (buf) {
+      const out = await sharp(buf)
+        .resize(size, size, {
+          fit,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+          kernel: sharp.kernel.lanczos3,
+        })
+        .png({ compressionLevel: 9 })
+        .toBuffer()
+      uri = `data:image/png;base64,${out.toString('base64')}`
+    }
+  } catch (_) {
+    uri = ''
+  }
+  lunaAssetCache.set(key, uri)
+  return uri
+}
+
+/** UI_MonsterIcon_xxx → 立绘 URL（站点同款替换规则） */
+function lunaBossArtUrl(icon = '') {
+  const name = String(icon || '').replace('UI_MonsterIcon_', 'UI_Img_LeyLineChallenge_')
+  if (!name) return ''
+  return `${LUNA_ASSETS}/leyline/${name}.png`
+}
+
+/**
+ * RecommendedLevelMechanic → chip 段落
+ * "{SPRITE_PRESET#11022}元素反应<Color=#FFFFFF40> | </Color>{SPRITE_PRESET#11001}元素角色"
+ */
+async function lunaParseTagLine(text = '', tagType = '') {
+  const raw = String(text || '').trim()
+  if (!raw) return null
+  const segs = raw.split(/(\{SPRITE_PRESET#\d+\}|<color=#[A-Fa-f0-9]{8}>[\s\S]*?<\/color>)/gi)
+  const items = []
+  for (const seg of segs) {
+    if (!seg) continue
+    const sp = seg.match(/^\{SPRITE_PRESET#(\d+)\}$/i)
+    if (sp) {
+      const icon = await lunaAssetToDataUri(`${LUNA_ASSETS}/icons/${sp[1]}.png`, { size: 48 })
+      if (icon) items.push({ type: 'icon', icon })
+      continue
+    }
+    const col = seg.match(/^<color=(#[A-Fa-f0-9]{8})>([\s\S]*?)<\/color>$/i)
+    if (col) {
+      const t = col[2].trim()
+      if (t) items.push({ type: 'sep', text: t })
+      continue
+    }
+    const t = seg.trim()
+    if (t) items.push({ type: 'text', text: t })
+  }
+  if (!items.length) return null
+  return {
+    items,
+    good: tagType === 'Advantage',
+    bad: tagType === 'Disadvantage',
+  }
+}
+
+/**
+ * 幽境危战 = lunaris.moe leyline（https://gi.lunaris.moe/leyline）
+ * 只取「难度 5」（monsterLevel 105）三名强敌：立绘 / 血量 / 抗性 / 关键机制
  *
- * 注意：测试包可能同时挂着「正式当期」和「beta 专属期」（时间重叠）。
- * #下期危战 通过 live/latest 差集优先取 beta 专属期（如 星芒之役 5269011）。
+ * #版本危战 = 当期（时间命中）；#下期危战 = 下一期（未放出则退当期并提示）
  */
 async function loadGiLeyline(offset = 0, channel = 'live') {
+  const list = await lunaListSchedules()
+  const { idx, offset: relOffset, total, note } = lunaResolveIndex(list, channel, offset)
+  const meta = list[idx]
+  const detail = await lunaFetchDetail(meta.id)
+
+  // 站点口径：只留 monsterLevel >= 90，难度号 = 下标 + 3
+  const levels = (Array.isArray(detail.levels) ? detail.levels : [])
+    .filter((l) => Number(l?.monsterLevel) >= LUNA_MIN_MONSTER_LEVEL)
+    .sort((a, b) => Number(a.monsterLevel) - Number(b.monsterLevel))
+  if (!levels.length) throw new Error('幽境危战难度数据为空')
+  const wantIdx = LUNA_WANT_DIFF - LUNA_DIFF_BASE
+  const level = levels[wantIdx] || levels.at(-1)
+  const diffNo = (levels.indexOf(level) >= 0 ? levels.indexOf(level) : levels.length - 1) + LUNA_DIFF_BASE
+
+  const configs = Array.isArray(level.levelConfigs) ? level.levelConfigs : []
+  const bosses = []
+  for (const c of configs) {
+    const st = c.monsterStats || {}
+    const art = await lunaAssetToDataUri(lunaBossArtUrl(c.specialMonsterIcon), {
+      size: 420,
+      fit: 'inside',
+    })
+    // 机制：名称 + 同下标的最高难度描述（站点用 LevelMaxDescription）
+    const names = Array.isArray(c.chsMonsterSpecialMechanicName)
+      ? c.chsMonsterSpecialMechanicName
+      : []
+    const descs = Array.isArray(c.chsLevelMaxDescription) ? c.chsLevelMaxDescription : []
+    const mechanics = names
+      .map((n, i) => {
+        const name = String(n || '').trim()
+        const desc = String(descs[i] || '').trim()
+        if (!name || !desc) return null
+        return { name, descHtml: lunaRichText(desc) }
+      })
+      .filter(Boolean)
+
+    // 推荐配队 tag（元素反应 / 元素角色 / 生命之契角色 …）
+    const tagLines = []
+    const recs = Array.isArray(c.chsRecommendedLevelMechanic) ? c.chsRecommendedLevelMechanic : []
+    for (let i = 0; i < recs.length; i++) {
+      const t = await lunaParseTagLine(recs[i], (c.tagType || [])[i])
+      if (t) tagLines.push(t)
+    }
+
+    bosses.push({
+      bid: String(c.id || ''),
+      name: String(c.chsLevelName || '').trim() || '未知强敌',
+      art,
+      hpText: lunaFormatHp(st.hp),
+      monsterLevel: Number(st.level) || Number(level.monsterLevel) || 0,
+      resists: LUNA_RESIST.map((r) => ({
+        cls: r.cls,
+        name: r.name,
+        value: `${Math.round((Number(st[r.key]) || 0) * 100)}%`,
+      })),
+      tagLines,
+      mechanics,
+    })
+  }
+  if (!bosses.length) throw new Error('幽境危战强敌数据为空')
+
+  return {
+    game: 'gi',
+    gameName: 'GENSHIN IMPACT',
+    mode: 'leyline',
+    modeName: '幽境危战',
+    version: detail.challengeName || meta.challengeName || '',
+    channel,
+    channelLabel: channelLabel(channel),
+    periodId: meta.id,
+    dateBegin: String(detail.scheduleStartTime || meta.begin || '').split(' ')[0],
+    dateEnd: String(detail.scheduleEndTime || meta.end || '').split(' ')[0],
+    diffNo,
+    diffLabel: `难度 ${diffNo}`,
+    monsterLevel: Number(level.monsterLevel) || 0,
+    bosses,
+    offset: relOffset,
+    total,
+    source: 'lunaris.moe',
+    note,
+  }
+}
+
+/** 旧版 Nanoka 危战取数（已停用，保留备查） */
+async function loadGiLeylineNanoka(offset = 0, channel = 'live') {
   const manifest = await getManifest()
   const version = pickGiVersion(manifest, channel)
   if (!version) throw new Error('Nanoka manifest 未返回原神版本')
@@ -1729,18 +2083,18 @@ async function listPeriods(game, channel = 'live') {
     return window
   }
   if (game === 'gi-leyline') {
-    const version = pickGiVersion(manifest, channel)
-    const { list, picked } = await resolveLeylinePeriod(version, channel, 0)
+    // 幽境危战走 lunaris.moe
+    const list = await lunaListSchedules()
+    const { baseIdx } = lunaResolveIndex(list, channel, 0)
     const ch = channelLabel(channel)
-    const baseIdx = list.findIndex((x) => String(x.id) === String(picked.baseId))
-    const bi = baseIdx >= 0 ? baseIdx : list.length - 1
     const window = []
-    for (let i = bi; i >= 0 && window.length < 12; i--) {
+    for (let i = baseIdx; i >= 0 && window.length < 12; i--) {
       const x = list[i]
-      const rel = bi - i
+      const rel = baseIdx - i
       const tag = rel === 0 ? '【当期】' : `【上${rel}期】`
+      const ver = x.challengeName ? `v${x.challengeName}` : ''
       window.push(
-        `${tag} ${x.id} ${x.zh || x.en || ''} ${x._begin?.slice(0, 10) || ''} · ${ch} v${version}`,
+        `${tag} ${x.id} ${ver} ${(x.begin || '').slice(0, 10)} ~ ${(x.end || '').slice(0, 10)} · ${ch}`,
       )
     }
     return window
@@ -1843,14 +2197,18 @@ export class nanokaAbyss extends plugin {
       try {
         const lines = await listPeriods('gi-leyline', channel)
         return e.reply(
-          `Nanoka 幽境危战（${channelLabel(channel)}）最近期数：\n${lines.join('\n')}\n——\n#版本危战=正式服 · #下期危战=下期`,
+          `幽境危战（${channelLabel(channel)}）最近期数：\n${lines.join('\n')}\n——\n#版本危战=当期 · #下期危战=下一期 · 数据 lunaris.moe`,
           true,
         )
       } catch (err) {
         return e.reply(`获取列表失败：${err.message}`, true)
       }
     }
-    return this.renderMode(e, () => loadGiLeyline(listOffset(msg), channel), 'gi-leyline')
+    return this.renderMode(e, () => loadGiLeyline(listOffset(msg), channel), 'gi-leyline', {
+      tpl: 'leyline_luna',
+      progress: '正在从 lunaris.moe 拉取幽境危战数据…',
+      baseScale: 1.3,
+    })
   }
 
   async hsrMaze(e) {
@@ -1893,15 +2251,16 @@ export class nanokaAbyss extends plugin {
     )
   }
 
-  async renderMode(e, loader, saveId) {
-    await replyProgress(e, '正在从 Nanoka 拉取版本数据…')
+  async renderMode(e, loader, saveId, opts = {}) {
+    const tpl = opts.tpl || 'nanoka_abyss'
+    await replyProgress(e, opts.progress || '正在从 Nanoka 拉取版本数据…')
     let data
     try {
       data = this.trimPayload(await loader())
       data = await hydrateIcons(data)
     } catch (err) {
       logger?.error?.('[xhh-TL][nanokaAbyss]', err)
-      return e.reply(`Nanoka 数据获取失败：${err.message || err}`, true)
+      return e.reply(`数据获取失败：${err.message || err}`, true)
     }
 
     try {
@@ -1916,6 +2275,7 @@ export class nanokaAbyss extends plugin {
           saveId,
         },
         saveId,
+        { tpl, baseScale: opts.baseScale },
       )
       return this.sendImage(e, buf)
     } catch (err) {
@@ -2003,6 +2363,19 @@ export class nanokaAbyss extends plugin {
         ...s,
         desc: s.desc && s.desc.length > 320 ? `${s.desc.slice(0, 320)}…` : s.desc,
       }))
+    } else if (out.mode === 'leyline' && Array.isArray(out.bosses)) {
+      // lunaris 格式：压缩机制描述，避免图片过大
+      out.bosses = out.bosses.map((b) => ({
+        ...b,
+        mechanics: (b.mechanics || []).map((m) => {
+          const plain = (m.descHtml || '').replace(/<[^>]+>/g, '')
+          if (plain.length > 300) {
+            const trimmed = plain.slice(0, 300)
+            return { ...m, descHtml: lunaRichText(trimmed + '…') }
+          }
+          return m
+        }),
+      }))
     }
     if (Array.isArray(out.floors)) {
       out.floors = out.floors.map((f) => ({
@@ -2030,10 +2403,11 @@ export class nanokaAbyss extends plugin {
     return out
   }
 
-  async renderToBuffer(e, data, saveId) {
+  async renderToBuffer(e, data, saveId, opts = {}) {
+    const tpl = opts.tpl || 'nanoka_abyss'
     const renderConfig = cfg()
-    const renderScale = getRenderScaleStyle(renderConfig, 1.6)
-    const renderResult = await e.runtime.render('xhh-TL', 'nanoka_abyss', data, {
+    const renderScale = getRenderScaleStyle(renderConfig, opts.baseScale ?? 1.6)
+    const renderResult = await e.runtime.render('xhh-TL', tpl, data, {
       retType: 'base64',
       imgType: 'png',
       beforeRender({ data: d }) {
@@ -2044,7 +2418,7 @@ export class nanokaAbyss extends plugin {
             scale: renderScale,
           },
           ppath: '../../../../plugins/xhh-TL/resources/',
-          tplFile: path.join(pluginDir, 'resources/nanoka_abyss/nanoka_abyss.html'),
+          tplFile: path.join(pluginDir, `resources/${tpl}/${tpl}.html`),
           saveId,
         }
       },
