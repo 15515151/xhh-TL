@@ -892,11 +892,11 @@ function lunaRichText(s = '') {
     .replace(/\n/g, '<br>')
 }
 
-/** 10748446 → 10.748.446（与站点 pt-BR 一致） */
+/** 10748446 → 10,748,446（每 3 位一个逗号） */
 function lunaFormatHp(hp) {
   const n = Math.round(Number(hp) || 0)
   if (!n) return '-'
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
 /** lunaris 静态资源 → dataURI（缓存，失败返回空串） */
