@@ -11,7 +11,7 @@ import crypto from 'crypto'
 import md5 from 'md5'
 import YAML from 'yaml'
 import fetch from 'node-fetch'
-import { createUser, getAliveMysIds } from './userBind.js'
+import { createUser, getAliveMysIds, hasRuntimeBinding } from './userBind.js'
 import { getDeletedMap, fingerprintStoken, removeDeleted } from './deletedCk.js'
 import { getStokenCandidateFiles } from './pluginConfig.js'
 
@@ -111,6 +111,44 @@ export async function stokenToCookie(entry) {
   return entry.ck || entry.ck_stoken || baseCk
 }
 
+function withStoredStoken(ltuid, mys) {
+  let ck = mys?.ck || ''
+  const stoken = mys?.stoken
+  if (!/stoken=/.test(ck) && typeof stoken === 'string' && stoken) {
+    const stuid =
+      mys.stuid ||
+      cookiePart(ck, 'account_id') ||
+      cookiePart(ck, 'ltuid') ||
+      String(ltuid || '')
+    let extra = `stoken=${stoken};`
+    if (stuid) extra += `stuid=${stuid};`
+    if (typeof mys.mid === 'string' && mys.mid) extra += `mid=${mys.mid};`
+    ck = ck ? `${ck.replace(/;?\s*$/, '')};${extra}` : extra
+  }
+  return ck
+}
+
+function pickUserCookie(user, uid, { allow = () => true, allowAny = false } = {}) {
+  const entries = Object.entries(user?.mysUsers || {}).filter(
+    ([ltuid, mys]) => mys?.ck && allow(String(ltuid), mys),
+  )
+  if (!entries.length) return ''
+
+  const owned = entries.filter(([, mys]) => {
+    const uids = [].concat(mys.uids?.gs || [], mys.uids?.sr || [], mys.uids?.zzz || []).map(String)
+    return !uids.length || uids.includes(String(uid))
+  })
+
+  let usable = owned
+  if (!usable.length && (allowAny || entries.length === 1)) usable = entries
+
+  const pick =
+    usable.find(([, mys]) => /cookie_token=/.test(mys.ck || '')) ||
+    usable.find(([, mys]) => /ltoken=/.test(mys.ck || '')) ||
+    usable[0]
+  return pick ? withStoredStoken(pick[0], pick[1]) : ''
+}
+
 /**
  * 为某 QQ + UID 选取可用 stoken / cookie（体力 widget 与 CK 兜底共用）
  * @returns {string|false}
@@ -144,6 +182,19 @@ export async function getstoken(qq, uid, e = null) {
       }
     }
     return true
+  }
+
+  // Match miao-plugin semantics: once Runtime/NoteUser is available it is the
+  // sole source of truth. A missing Runtime credential means deleted/unbound;
+  // standalone yaml must not bring that account back.
+  if (hasRuntimeBinding(e)) {
+    try {
+      const user = await createUser(qq, e)
+      return pickUserCookie(user, uid) || false
+    } catch (err) {
+      logger?.debug?.(`[xhh-TL][getstoken] Runtime credential lookup failed: ${err?.message}`)
+      return false
+    }
   }
 
   const entrySid = (entry) => {
@@ -213,61 +264,15 @@ export async function getstoken(qq, uid, e = null) {
 
   // SQLite/redis 绑定 CK 兜底（与深渊同源）
   try {
-    const nu = await createUser(qq, e)
-    const entries = Object.entries(nu?.mysUsers || {})
-    const aliveMys = entries.filter(([ltuid, m]) => {
-      if (!m?.ck) return false
-      if (isStillDeleted(String(ltuid), cookiePart(m.ck, 'stoken'))) return false
-      if (!bind.hasRow) return true
-      return bind.ids.has(String(ltuid))
+    const user = await createUser(qq, e)
+    const ck = pickUserCookie(user, uid, {
+      allow: (ltuid, mys) => {
+        if (isStillDeleted(ltuid, cookiePart(mys.ck, 'stoken'))) return false
+        return !bind.hasRow || bind.ids.has(ltuid)
+      },
+      allowAny: !bind.hasRow,
     })
-
-    const ownedMatch = aliveMys.filter(([, m]) => {
-      const owned = [].concat(
-        m.uids?.gs || [],
-        m.uids?.sr || [],
-        m.uids?.zzz || [],
-      ).map(String)
-      return owned.length === 0 || owned.includes(String(uid))
-    })
-
-    let usable = ownedMatch
-    if (!usable.length && bind.hasRow && aliveMys.length === 1) {
-      usable = aliveMys
-    } else if (!usable.length && !bind.hasRow) {
-      usable = aliveMys
-    }
-
-    // 选中账号可能把 stoken 单独存在字段里，没拼进 m.ck（诊断证实：账号 stoken:Y，
-    // 但兜底返回的 ck stoken:N）。体力 widget 接口靠 stoken 走稳定路径，纯 cookie_token
-    // 会过期导致「时好时坏」。这里把账号自带的 stoken/mid/stuid 补回 cookie 串，
-    // 让 note() 走 stoken widget。typeof 守卫：非字符串一律不动，维持原样零回归。
-    const withStoken = (ltuid, m) => {
-      let ck = m.ck || ''
-      const st = m.stoken
-      if (!/stoken=/.test(ck) && typeof st === 'string' && st) {
-        const stuid =
-          m.stuid ||
-          cookiePart(ck, 'account_id') ||
-          cookiePart(ck, 'ltuid') ||
-          String(ltuid || '')
-        let add = `stoken=${st};`
-        if (stuid) add += `stuid=${stuid};`
-        if (typeof m.mid === 'string' && m.mid) add += `mid=${m.mid};`
-        ck = ck ? `${ck.replace(/;?\s*$/, '')};${add}` : add
-      }
-      return ck
-    }
-
-    // 优先带 cookie_token 的账号，其次 ltoken，再次任意；选定后补回 stoken
-    const pick =
-      usable.find(([, m]) => /cookie_token=/.test(m.ck || '')) ||
-      usable.find(([, m]) => /ltoken=/.test(m.ck || '')) ||
-      usable[0]
-    if (pick) {
-      const ck = withStoken(pick[0], pick[1])
-      if (ck) return ck
-    }
+    if (ck) return ck
   } catch (err) {
     logger?.debug?.(`[xhh-TL][getstoken] SQLite 兜底失败: ${err?.message}`)
   }

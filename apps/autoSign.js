@@ -337,9 +337,12 @@ export class autoSign extends plugin {
     for (const uid of uidList) {
       try {
         // 为每个 uid 构造带该 uid 的 e，让 resolveAuth 精确取该账号完整 cookie
-        const authE = realE
-          ? Object.assign(Object.create(Object.getPrototypeOf(realE) || Object.prototype), realE, { uid })
-          : { user_id: qq, self_id: e?.self_id, message: [], msg: String(uid), uid }
+        const baseE = realE || e || {}
+        const authE = Object.assign(
+          Object.create(Object.getPrototypeOf(baseE) || Object.prototype),
+          baseE,
+          { user_id: qq, self_id: baseE.self_id, message: baseE.message || [], msg: String(uid), uid },
+        )
         const auth = await resolveAuth(authE, { needCookie: true, game })
         if (!auth?.ck || !/cookie_token|account_id=/.test(auth.ck)) {
           results.push({ uid, code: 'expired', msg: `${GAME_LABEL[game]} 无有效登录，请【#刷新ck】，仍不行则【#扫码登录】`, game })

@@ -400,7 +400,7 @@ class BindUser {
 async function tryRuntimeNoteUser(qq, e) {
   try {
     const NoteUser = e?.runtime?.NoteUser
-    if (NoteUser?.create) {
+    if (!e?.runtime?._xhhCompatNoteUser && NoteUser?.create) {
       const user = await NoteUser.create(qq)
       if (user && typeof user.getUid === 'function') return wrapLegacyUser(user)
     }
@@ -413,6 +413,19 @@ async function tryRuntimeNoteUser(qq, e) {
   } catch (_) {}
 
   return null
+}
+
+/**
+ * Whether the current event has an authoritative Runtime binding provider.
+ * When this is true, callers must not resurrect credentials from standalone
+ * stoken yaml files after Runtime has removed an account.
+ */
+export function hasRuntimeBinding(e) {
+  try {
+    return !e?.runtime?._xhhCompatNoteUser && typeof e?.runtime?.NoteUser?.create === 'function'
+  } catch (_) {
+    return false
+  }
 }
 
 function wrapLegacyUser(user) {
@@ -441,6 +454,97 @@ function wrapLegacyUser(user) {
   }
 }
 
+function mergeRuntimeSupplements(runtimeUser, qq) {
+  const runtimeMys = runtimeUser?.mysUsers || {}
+  const aliveIds = new Set(Object.keys(runtimeMys).map(String))
+  if (!aliveIds.size) return runtimeUser
+
+  const yamlPart = readFromStokenYaml(qq)
+  if (!yamlPart) return runtimeUser
+
+  const lists = {}
+  const supplementalUids = {}
+  for (const game of GAMES) {
+    const base = runtimeUser.getUidList?.(game) || []
+    const seen = new Set(base.map((item) => String(item?.uid || item)))
+    lists[game] = [...base]
+
+    for (const item of yamlPart.uidLists?.[game] || []) {
+      const uid = String(item?.uid || '')
+      const stuid = String(item?.stuid || item?.ltuid || '')
+      if (!uid || !aliveIds.has(stuid)) continue
+
+      supplementalUids[stuid] ||= {}
+      supplementalUids[stuid][game] ||= []
+      if (!supplementalUids[stuid][game].includes(uid)) {
+        supplementalUids[stuid][game].push(uid)
+      }
+
+      if (!seen.has(uid)) {
+        seen.add(uid)
+        lists[game].push({ ...item, stuid, ltuid: stuid })
+      }
+    }
+  }
+
+  const mysUsers = { ...runtimeMys }
+  for (const stuid of aliveIds) {
+    const current = runtimeMys[stuid]
+    const supplement = yamlPart.mysUsers?.[stuid]
+    if (!current || !supplement) continue
+
+    const merged = Object.assign(
+      Object.create(Object.getPrototypeOf(current) || Object.prototype),
+      current,
+    )
+    if (!merged.stoken && supplement.stoken) merged.stoken = supplement.stoken
+    if (!merged.mid && supplement.mid) merged.mid = supplement.mid
+
+    const uids = { ...(current.uids || {}) }
+    for (const game of GAMES) {
+      const values = [
+        ...(uids[game] || []),
+        ...(supplementalUids[stuid]?.[game] || []),
+      ].map(String)
+      if (values.length) uids[game] = [...new Set(values)]
+    }
+    merged.uids = uids
+    mysUsers[stuid] = merged
+  }
+
+  const getUid = (game = 'gs') => {
+    const key = gameKey(game)
+    return runtimeUser.getUid?.(key) || lists[key]?.[0]?.uid || ''
+  }
+  const getUidList = (game = 'gs') => lists[gameKey(game)] || []
+  const getMysUser = (game = 'gs') => {
+    const key = gameKey(game)
+    for (const item of lists[key] || []) {
+      const stuid = String(item?.ltuid || item?.stuid || '')
+      if (stuid && mysUsers[stuid]) return mysUsers[stuid]
+    }
+    const native = runtimeUser.getMysUser?.(key)
+    if (native) {
+      const stuid = String(native.ltuid || native.stuid || '')
+      return mysUsers[stuid] || native
+    }
+    const ids = Object.keys(mysUsers)
+    return ids.length ? mysUsers[ids[0]] : false
+  }
+
+  return new Proxy(runtimeUser, {
+    get(target, key) {
+      if (key === 'mysUsers') return mysUsers
+      if (key === 'hasCk') return !!(target.hasCk || Object.keys(mysUsers).length)
+      if (key === 'getUid') return getUid
+      if (key === 'getUidList') return getUidList
+      if (key === 'getMysUser') return getMysUser
+      const value = Reflect.get(target, key, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+}
+
 /**
  * 创建绑定用户
  * @param {string|number|object} qqOrE - QQ 或 e 消息对象
@@ -455,50 +559,10 @@ export async function createUser(qqOrE, e = null) {
   }
   qq = await resolveMainQq(qq)
 
-  // 1) Runtime NoteUser（有 genshin 时最完整，且不 import genshin）
+  // Runtime decides which accounts are alive. Standalone yaml may only add
+  // game UIDs/stoken to those accounts; it can never restore a removed stuid.
   const runtimeUser = await tryRuntimeNoteUser(qq, event)
-  if (runtimeUser) {
-    // 仍合并 stoken，补全 Runtime 可能缺的 zzz 等
-    try {
-      const yamlPart = readFromStokenYaml(qq)
-      if (yamlPart) {
-        const lists = {}
-        for (const g of GAMES) {
-          const fromRt = runtimeUser.getUidList?.(g) || []
-          const seen = new Set(fromRt.map((x) => String(x.uid || x)))
-          const merged = [...fromRt]
-          for (const item of yamlPart.uidLists[g] || []) {
-            const u = String(item.uid)
-            if (!seen.has(u)) {
-              seen.add(u)
-              merged.push(item)
-            }
-          }
-          lists[g] = merged
-        }
-        // mysUsers 合并
-        const mys = { ...(runtimeUser.mysUsers || {}), ...(yamlPart.mysUsers || {}) }
-        return {
-          qq,
-          mysUsers: mys,
-          get hasCk() {
-            return Object.keys(mys).length > 0
-          },
-          getUid(game = 'gs') {
-            const g = gameKey(game)
-            return runtimeUser.getUid?.(g) || lists[g]?.[0]?.uid || ''
-          },
-          getUidList(game = 'gs') {
-            return lists[gameKey(game)] || []
-          },
-          getMysUser(game = 'gs') {
-            return runtimeUser.getMysUser?.(game) || false
-          },
-        }
-      }
-    } catch (_) {}
-    return runtimeUser
-  }
+  if (runtimeUser) return mergeRuntimeSupplements(runtimeUser, qq)
 
   // 2) SQLite + stoken + redis
   const sqlitePart = await readFromSqlite(qq)
