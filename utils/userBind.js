@@ -400,7 +400,7 @@ class BindUser {
 async function tryRuntimeNoteUser(qq, e) {
   try {
     const NoteUser = e?.runtime?.NoteUser
-    if (NoteUser?.create) {
+    if (!e?.runtime?._xhhCompatNoteUser && NoteUser?.create) {
       const user = await NoteUser.create(qq)
       if (user && typeof user.getUid === 'function') return wrapLegacyUser(user)
     }
@@ -413,6 +413,19 @@ async function tryRuntimeNoteUser(qq, e) {
   } catch (_) {}
 
   return null
+}
+
+/**
+ * Whether the current event has an authoritative Runtime binding provider.
+ * When this is true, callers must not resurrect credentials from standalone
+ * stoken yaml files after Runtime has removed an account.
+ */
+export function hasRuntimeBinding(e) {
+  try {
+    return !e?.runtime?._xhhCompatNoteUser && typeof e?.runtime?.NoteUser?.create === 'function'
+  } catch (_) {
+    return false
+  }
 }
 
 function wrapLegacyUser(user) {
@@ -455,50 +468,10 @@ export async function createUser(qqOrE, e = null) {
   }
   qq = await resolveMainQq(qq)
 
-  // 1) Runtime NoteUser（有 genshin 时最完整，且不 import genshin）
+  // Runtime is authoritative. Do not merge stale standalone yaml credentials
+  // back into an account that Runtime has already removed.
   const runtimeUser = await tryRuntimeNoteUser(qq, event)
-  if (runtimeUser) {
-    // 仍合并 stoken，补全 Runtime 可能缺的 zzz 等
-    try {
-      const yamlPart = readFromStokenYaml(qq)
-      if (yamlPart) {
-        const lists = {}
-        for (const g of GAMES) {
-          const fromRt = runtimeUser.getUidList?.(g) || []
-          const seen = new Set(fromRt.map((x) => String(x.uid || x)))
-          const merged = [...fromRt]
-          for (const item of yamlPart.uidLists[g] || []) {
-            const u = String(item.uid)
-            if (!seen.has(u)) {
-              seen.add(u)
-              merged.push(item)
-            }
-          }
-          lists[g] = merged
-        }
-        // mysUsers 合并
-        const mys = { ...(runtimeUser.mysUsers || {}), ...(yamlPart.mysUsers || {}) }
-        return {
-          qq,
-          mysUsers: mys,
-          get hasCk() {
-            return Object.keys(mys).length > 0
-          },
-          getUid(game = 'gs') {
-            const g = gameKey(game)
-            return runtimeUser.getUid?.(g) || lists[g]?.[0]?.uid || ''
-          },
-          getUidList(game = 'gs') {
-            return lists[gameKey(game)] || []
-          },
-          getMysUser(game = 'gs') {
-            return runtimeUser.getMysUser?.(game) || false
-          },
-        }
-      }
-    } catch (_) {}
-    return runtimeUser
-  }
+  if (runtimeUser) return runtimeUser
 
   // 2) SQLite + stoken + redis
   const sqlitePart = await readFromSqlite(qq)

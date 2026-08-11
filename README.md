@@ -66,6 +66,7 @@ cd xhh-TL && npm install --no-save
 依赖：
 - **必需**：`miao-plugin`（原版或兼容 fork）
 - **绑定数据**：云崽 Cookie/UID 绑定，或 `xiaoyao-cvs-plugin` / `xhh` 扫码 stoken
+- **鉴权规则**：检测到云崽 Runtime 时以 Runtime 绑定为唯一依据；删除 CK 后不会从残留 stoken 文件恢复账号。仅在没有完整 Runtime 时使用 SQLite / stoken 文件兼容层
 - **genshin 插件可选**：无 genshin 时自动启用兼容层，体力 / 深渊 / 剧诗均可独立工作
 
 ## 更新

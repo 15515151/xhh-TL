@@ -29,7 +29,7 @@ import fetch from 'node-fetch'
 import LiteMysApi from './mysClient.js'
 import { runBbsVerify } from './mysVerify.js'
 import { cookiePart } from './auth.js'
-import { createUser, getAliveMysIds } from './userBind.js'
+import { createUser, getAliveMysIds, hasRuntimeBinding } from './userBind.js'
 import { getDeletedMap, fingerprintStoken, removeDeleted } from './deletedCk.js'
 import { getStokenCandidateFiles, config } from './pluginConfig.js'
 
@@ -653,6 +653,18 @@ function readGsuidAccounts(qq) {
 export async function listBbsAccounts(qq, e = null) {
   const out = new Map() // stuid -> { stuid, cookie }
 
+  // Runtime owns the account lifecycle when available. Keep yaml/gsuid as
+  // stoken providers, but only for accounts still present in Runtime.
+  let runtimeIds = null
+  if (hasRuntimeBinding(e)) {
+    try {
+      const runtimeUser = await createUser(qq, e)
+      runtimeIds = new Set(Object.keys(runtimeUser?.mysUsers || {}).map(String))
+    } catch (_) {
+      runtimeIds = new Set()
+    }
+  }
+
   let bind = { hasRow: false, ids: new Set() }
   try {
     bind = await getAliveMysIds(qq)
@@ -683,6 +695,7 @@ export async function listBbsAccounts(qq, e = null) {
   const accept = (stuid, stoken, mid, extra = null) => {
     const sid = String(stuid || '')
     if (!sid || !stoken) return
+    if (runtimeIds && !runtimeIds.has(sid)) return
     if (isStillDeleted(sid, stoken)) return
     if (bind.hasRow && !bind.ids.has(sid)) return
     let cookie = `stuid=${sid};stoken=${stoken};`

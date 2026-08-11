@@ -6,7 +6,7 @@
  * 无 genshin 时：注入 getMysInfo / getUid / getMysApi + e.user。
  */
 
-import { createUser } from './userBind.js'
+import { createUser, hasRuntimeBinding } from './userBind.js'
 import LiteMysApi, { getServer, gameKey as resolveGame } from './mysClient.js'
 import { cookiePart, stokenToCookie, findStokenEntry } from './auth.js'
 
@@ -60,6 +60,7 @@ function resolveTargetQq(e) {
 async function resolveAuth(e, { needCookie = true, game = 'gs' } = {}) {
   const targetQq = resolveTargetQq(e)
   const selfQq = String(e.user_id)
+  const runtimeAuthoritative = hasRuntimeBinding(e)
   const user = await createUser(targetQq, e)
   const g = resolveGame(game, e)
 
@@ -104,7 +105,7 @@ async function resolveAuth(e, { needCookie = true, game = 'gs' } = {}) {
   }
 
   // 2) 有 ltoken 但无 cookie_token 时，仍尝试用 stoken 换完整 ck
-  if (!ck || (needCookie && !/cookie_token/.test(ck))) {
+  if (!runtimeAuthoritative && (!ck || (needCookie && !/cookie_token/.test(ck)))) {
     try {
       const entry = findStokenEntry(targetQq, uid)
       if (entry) {
@@ -120,7 +121,7 @@ async function resolveAuth(e, { needCookie = true, game = 'gs' } = {}) {
   }
 
   // 3) 查自己时可用 self 绑定
-  if (!ck && targetQq !== selfQq) {
+  if (!runtimeAuthoritative && !ck && targetQq !== selfQq) {
     const selfUser = await createUser(selfQq, e)
     for (const [lt, mys] of Object.entries(selfUser.mysUsers || {})) {
       if (mys?.ck) {
@@ -276,29 +277,11 @@ export async function ensureRuntime(e, opts = {}) {
 
     // 暴露 NoteUser 兼容
     if (!runtime.NoteUser) {
-      runtime.NoteUser = { create: createUser }
-    }
-  } else {
-    // 有 genshin：包装 getMysInfo，失败时回退到 polyfill
-    if (!runtime._xhhOrigGetMysInfo && typeof runtime.getMysInfo === 'function') {
-      runtime._xhhOrigGetMysInfo = runtime.getMysInfo.bind(runtime)
-      runtime.getMysInfo = async function getMysInfoWrapped(targetType = 'all') {
-        try {
-          const ret = await runtime._xhhOrigGetMysInfo(targetType)
-          if (ret && ret.uid && ret.ckInfo?.ck) return ret
-        } catch (err) {
-          if (typeof logger !== 'undefined') {
-            logger.debug?.(`[xhh-TL][runtime] system getMysInfo fail: ${err.message}`)
-          }
-        }
-        // fallback
-        const game = detectGame(e)
-        if (game === 'sr') e.isSr = true
-        e.game = e.game || game
-        const auth = await resolveAuth(e, { needCookie: true, game })
-        if (!auth.uid || !auth.ck) return false
-        return buildMysInfo(e, auth)
-      }
+      runtime._xhhCompatNoteUser = true
+      Object.defineProperty(runtime, 'NoteUser', {
+        value: { create: createUser },
+        configurable: true,
+      })
     }
   }
 

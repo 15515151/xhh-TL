@@ -314,7 +314,8 @@ export class autoBbsCoin extends plugin {
 
       for (const qq of plan[gid]) {
         try {
-          const accounts = await listBbsAccounts(qq, null)
+          const authE = this.makeFakeE(qq, gid)
+          const accounts = await listBbsAccounts(qq, authE)
           if (!accounts.length) {
             logger?.mark?.(`[xhh-TL][米游币] QQ ${qq} 无可用米游社账号，跳过`)
             continue
