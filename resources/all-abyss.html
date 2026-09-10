@@ -37,6 +37,19 @@ body, .container {
   position: relative;
 }
 
+/* 背景图只当氛围：整张压一层深色，越往下越暗，
+ * 不然彩图透到卡片和字上面，小字（buff 说明、天赋数字）就糊了。
+ * 下面所有直接子元素都带 z-index:1，浮在这一层之上。
+ */
+.all-abyss-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(180deg, rgba(8, 11, 21, 0.58) 0%, rgba(8, 11, 21, 0.78) 30%, rgba(8, 11, 21, 0.9) 100%);
+  pointer-events: none;
+}
+
 /* ==================== 顶部标题 ==================== */
 .aa-header {
   text-align: center;
@@ -107,7 +120,7 @@ body, .container {
   overflow: hidden;
   border: 1px solid rgba(var(--mode-c, 92, 145, 210), 0.32);
   border-radius: 0 14px 0 0;
-  background: linear-gradient(120deg, rgba(var(--mode-c, 92, 145, 210), 0.28), rgba(10, 14, 26, 0.66) 70%);
+  background: linear-gradient(120deg, rgba(var(--mode-c, 92, 145, 210), 0.26), rgba(10, 14, 26, 0.52) 72%);
 }
 
 /* 左边一条模式色，四个模式一眼分得清 */
@@ -166,7 +179,7 @@ body, .container {
   overflow: hidden;
   border: 1px solid rgba(var(--mode-c, 92, 145, 210), 0.34);
   border-radius: 0 22px 0 0;
-  background: linear-gradient(180deg, rgba(var(--mode-c, 92, 145, 210), 0.13), rgba(11, 15, 27, 0.72) 46%);
+  background: linear-gradient(180deg, rgba(var(--mode-c, 92, 145, 210), 0.12), rgba(11, 15, 27, 0.5) 52%);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
 }
 
