@@ -126,12 +126,26 @@ GT-Manual）。米游币覆盖三个版块，做满约 +20~22 币/账号/天。
 
 ## 安装
 
-在**云崽根目录**执行：
+在**云崽根目录**执行。三个源任选一个（内容完全一样，推荐国内的 gitcode 或 gitee）：
 
+**gitcode（国内直连最快）**
+```bash
+git clone --depth=1 https://gitcode.com/ccxhan/xhh-TL.git ./plugins/xhh-TL
+```
+
+**gitee（国内）**
+```bash
+git clone --depth=1 https://gitee.com/longhengmu/xhh-TL.git ./plugins/xhh-TL
+```
+
+**GitHub**
 ```bash
 git clone --depth=1 https://github.com/cchanlan/xhh-TL.git ./plugins/xhh-TL
-# 国内直连更快：https://gitcode.com/ccxhan/xhh-TL.git
+```
 
+装依赖：
+
+```bash
 pnpm install --filter=xhh-TL
 # 没用 pnpm 的话：npm install --no-save --prefix ./plugins/xhh-TL
 ```
