@@ -105,6 +105,12 @@ function timeCalc(t) {
   return `${date} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
 }
 
+// 格子里的时间省掉年份：格宽就那么点，年份每格都一样，留着只会把标题挤没
+function shortTime(t) {
+  if (!t) return '';
+  return `${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
+}
+
 // 处理深渊数据
 function processChallengeData(res, tag, type) {
   if (!res || typeof res !== 'object') return null;
@@ -116,14 +122,16 @@ function processChallengeData(res, tag, type) {
   let floors = Array.isArray(res?.all_floor_detail) ? res.all_floor_detail : [];
   logger.info(`[xhh-TL][allAbyss] ${tag} 原始楼层数据: ${floors.length} 个, 楼层: ${floors.map(f => f?.floor || f?.name || '未知').join(', ')}`);
 
-  // 根据不同类型过滤楼层
-  if (tag === 'chaos') {
-    floors = floors.filter(f => !f?.is_fast && (f?.node_1 || f?.node_2));
-  } else if (tag === 'story') {
-    floors = floors.filter(f => !f?.is_fast && (f?.node_1 || f?.node_2)).slice(0, 4);
+  // 先滤掉没打的关卡（node 全空 / 快速通关的旧记录）
+  if (tag === 'chaos' || tag === 'story') {
+    floors = floors.filter(f => !f?.is_fast && (f?.node_1 || f?.node_2 || f?.node_3));
   } else if (tag === 'boss') {
     floors = floors.filter(f => !f?.is_fast && (f?.node_1?.avatars?.length || f?.node_2?.avatars?.length || f?.node_3?.avatars?.length));
   }
+
+  // 只留账号打到的最高难度：接口的 all_floor_detail 按难度降序（十二层→一层、难度04→01），
+  // 滤掉没打的后取首个即可。层数/难度写死在代码里迟早会过期，按接口顺序取才跟得上版本。
+  floors = floors.slice(0, 1);
 
   if (floors.length === 0) return null;
 
@@ -138,7 +146,7 @@ function processChallengeData(res, tag, type) {
       }
       return a;
     });
-    return { ...node, avatars, score: node.score || 0, time: timeCalc(node.challenge_time) };
+    return { ...node, avatars, score: node.score || 0, time: shortTime(node.challenge_time) };
   };
 
   let group;
@@ -208,19 +216,24 @@ function processPeakData(res) {
 
   return {
     nickname: res?.role?.nickname || '',
-    bossName: bossInfo.name || '将杀王棋',
+    // 接口给的怪物名在 name_mi18n，绝境前缀在 hard_mode_name_mi18n（形如「将杀王棋•绝境」）
+    bossName: bossInfo.hard_mode_name_mi18n || bossInfo.name_mi18n || bossInfo.name || '将杀王棋',
     bossIcon: bossInfo.icon || '',
     bossStars: bossRecord?.star_num || 0,
     mobStars: recordBrief.mob_stars || 0,
     totalStars: (bossRecord?.star_num || 0) + (recordBrief.mob_stars || 0),
     bossRound: bossRecord?.round_num || 0,
     bossAvatars: normalizeAvatars(bossRecord?.avatars),
+    bossBuff: pickBuff(bossRecord),
+    battleNum: record?.battle_num || 0,
+    group: record?.group || {},
     mobs: mobInfos.map((info, idx) => {
       const mobRecord = mobRecords[idx] || {};
       return {
         index: idx + 1,
         name: info.name || `关卡${idx + 1}`,
-        icon: info.icon || '',
+        monsterName: info.monster_name || '',
+        icon: info.icon || info.monster_icon || '',
         round: mobRecord?.round_num || 0,
         stars: mobRecord?.star_num || 0,
         avatars: normalizeAvatars(mobRecord?.avatars)
@@ -355,20 +368,20 @@ function floorSummary(sec) {
   })
 }
 
-// 补齐到整行：不足的格子放信息卡（出场角色 / 战绩清单 / 本期节点 / 统计周期）
-// 每个模式第一格固定放哪张卡、后面按什么顺序补，都按主人定的来
+// 补齐到整行：不足的格子放信息卡（出场角色 / 战绩清单 / 本期节点 / 本期概况）
+// 现在每个模式只渲染最高难度那一关，格子少，所以每段固定「1 张信息卡 + 3 个节点格」= 一整行
 const FILLER_SEQ = {
-  chaos: ['chars', 'floors', 'period'],
-  boss: ['bosses', 'chars', 'floors', 'period'],
+  chaos: ['chars', 'period', 'floors'],
+  boss: ['bosses', 'period', 'chars'],
   story: ['chars', 'period', 'floors'],
-  peak: ['bossimg']
+  peak: ['bossimg', 'period']
 }
 const FILLER_FALLBACK = ['chars', 'floors', 'period']
 
 function makeFiller(kind, sec, avatarData) {
   if (kind === 'chars') {
     const chars = countAvatars(sec.tiles, avatarData)
-    return chars.length ? { kind, title: '本模式出场', chars } : null
+    return chars.length ? { kind, title: '出场角色', chars } : null
   }
   if (kind === 'floors') {
     const floors = floorSummary(sec)
@@ -378,7 +391,7 @@ function makeFiller(kind, sec, avatarData) {
     return sec.bosses?.length ? { kind, title: '本期节点', bosses: sec.bosses } : null
   }
   if (kind === 'bossimg') {
-    return sec.bossImg ? { kind, title: '本期 Boss', img: sec.bossImg, name: sec.best, star: sec.star } : null
+    return sec.bossImg ? { kind, title: '本期 Boss', img: sec.bossImg, name: sec.best, star: sec.bossStars } : null
   }
   if (kind === 'period') {
     return {
@@ -391,7 +404,8 @@ function makeFiller(kind, sec, avatarData) {
         sec.best ? { k: '最高关卡', v: sec.best } : null,
         sec.battle != null ? { k: '挑战次数', v: `${sec.battle} 次` } : null,
         sec.totalScore ? { k: '总分', v: String(sec.totalScore) } : null,
-        { k: '关卡 / 场次', v: `${sec.floorCount} 关 · ${sec.tiles.length} 场` }
+        { k: '关卡 / 场次', v: `${sec.floorCount} 关 · ${sec.tiles.length} 场` },
+        ...(sec.extraRows || [])
       ])
     }
   }
@@ -416,7 +430,7 @@ function buildFillers(sec, need, avatarData) {
 /* 按行铺格：每行 cols 格，规则是「信息卡靠左、战绩格靠右」
  * 第一行 = 指定的信息卡 + 最高难度那一关的各节点（不满就继续补信息卡）
  * 之后   = 剩下的信息卡 + 其余关卡的节点连续排
- * 异相仲裁例外（主人指定）：第一行只放 Boss 图 + Boss 战绩并且居中，
+ * 异相仲裁例外（主人指定）：第一行 = Boss 图 + Boss 战绩 + 本期概况（各占一格），
  * 精英关另起一行、平分整行宽度。
  */
 const SPAN_TOTAL = 12
@@ -435,23 +449,21 @@ function layoutItems(sec, cols) {
   const gap = span => items.push({ gap: true, span })
 
   if (sec.breakRow) {
-    // 第一行：Boss 图 + Boss 战绩，左右留白居中
+    // 第一行：Boss 图 + Boss 战绩 + 补齐的信息卡，三格各 span 4 平分整行
     const row1 = []
-    if (fq.length) row1.push({ filler: fq.shift(), span: unit })
-    lodash.forEach(groups[0]?.list || [], t => row1.push({ tile: t, span: unit }))
-    const pad = Math.max(0, cols - row1.length)
-    const left = Math.floor(pad / 2)
-    for (let i = 0; i < left; i++) gap(unit)
+    if (fq.length) row1.push({ filler: fq.shift(), span: 4 })
+    lodash.forEach(groups[0]?.list || [], t => row1.push({ tile: t, span: 4 }))
+    while (fq.length) row1.push({ filler: fq.shift(), span: 4 })
     items.push(...row1)
-    for (let i = 0; i < pad - left; i++) gap(unit)
+    for (let k = row1.length; k < 3; k++) gap(4)
     // 其余关卡：一行一行铺，每行的格子平分整行宽度
     const rest = lodash.flatten(groups.slice(1).map(g => g.list))
     for (let i = 0; i < rest.length; i += cols) {
       const row = rest.slice(i, i + cols)
-      const span = SPAN_BY_COUNT[row.length] || unit
+      const span = SPAN_BY_COUNT[row.length] || 4
       lodash.forEach(row, t => items.push({ tile: t, span }))
       if (!SPAN_BY_COUNT[row.length]) {
-        for (let k = row.length; k < cols; k++) gap(unit)
+        for (let k = row.length; k < cols; k++) gap(span)
       }
     }
     return items
@@ -512,14 +524,19 @@ function buildSections({ chaosData, bossData, storyData, peakData, avatarData })
       floorCount: isPeak ? tiles.length : (item.data.floors?.length || 0),
       bosses: isPeak ? [] : bosses,
       bossImg: isPeak ? (item.data.bossIcon || '') : '',
+      bossStars: isPeak ? (Number(item.data.bossStars) || 0) : 0,
       // 异相仲裁：Boss 关和精英关分行放，空位用占位格
       breakRow: isPeak,
-      period: isPeak ? '' : `${timeCalc(group.begin_time)} - ${timeCalc(group.end_time)}`
+      period: `${timeCalc(group.begin_time)} - ${timeCalc(group.end_time)}`,
+      extraRows: isPeak ? lodash.compact([
+        item.data.bossStars ? { k: 'Boss 星数', v: `×${item.data.bossStars}` } : null,
+        item.data.mobStars ? { k: '精英星数', v: `×${item.data.mobStars}` } : null
+      ]) : []
     })
   }
-  // 列数：数据少的时候别硬撑 4 列，否则整行都是填充格
-  const total = lodash.sumBy(sections, s => s.tiles.length)
-  const cols = Math.max(1, Math.min(GRID_COLS, total))
+  // 列数固定：每段就是「1 张信息卡 + 最高关卡的那几个节点」，一行 4 格正好铺满。
+  // 不跟着数据量缩列——现在每段最多 4 个战绩格，缩列只会把一段拆成两行。
+  const cols = GRID_COLS
   for (const sec of sections) {
     sec.fillers = buildFillers(sec, fillerNeed(sec, cols), avatarData)
     sec.items = layoutItems(sec, cols)
@@ -677,11 +694,11 @@ export async function allAbyss(e) {
       const renderScale = getRenderScaleStyle(config(), isMobile ? 2.0 : 1.2);
       const tplFile = pluginDir + `/resources/${templateName}.html`;
       const ppath = '../../../../plugins/xhh-TL/resources/';
-      // 桌面版是「12 栅格 + 每格 span 3」的模块网格：一行 4 格，格宽固定，
-      // 画布宽度只跟列数有关（数据少时列数会降），跟模式数无关。
-      const TILE_WIDTH = 370;
+      // 桌面版布局：整图 = body 左右 padding + 4 个模式框各自的左右 padding +
+      // 4 个战绩格的宽度和 3 条间隙。宽度只跟列数有关（数据少时列数会降），跟模式数无关。
+      const TILE_WIDTH = 364;
       const TILE_GAP = 8;
-      const BODY_PADDING = 24; // .all-abyss-body 左右 padding 各 12
+      const BODY_PADDING = 24 + 24; // body 左右各 12 + 每个模式框左右各 12
       const { sections, cols: gridCols } = buildSections({ chaosData, bossData, storyData, peakData, avatarData });
       const pageWidth = Math.round(
         BODY_PADDING + gridCols * TILE_WIDTH + Math.max(0, gridCols - 1) * TILE_GAP
@@ -694,6 +711,7 @@ export async function allAbyss(e) {
         sections,
         gridCols,
         gridSpan: Math.round(12 / gridCols),
+        tileGap: TILE_GAP,
         pageWidth,
         avatars: avatarData,
         save_id: uid,
