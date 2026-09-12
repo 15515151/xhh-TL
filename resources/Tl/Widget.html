@@ -61,6 +61,19 @@
         </div>
         {{/if}}
 
+        <!-- 任务清单：每日委托 / 奖励等完成状态（与官方小组件同源） -->
+        {{if d.status && d.status.length}}
+        <div class="wg-acts wg-status">
+          <div class="wg-acts-title">任务清单</div>
+          {{each d.status s}}
+          <div class="wg-act-row">
+            <span class="wg-act-dot {{s.locked ? 'locked' : s.ok ? 'ok' : 'no'}}"></span>
+            <span class="wg-act-name">{{s.text}}</span>
+          </div>
+          {{/each}}
+        </div>
+        {{/if}}
+
         <!-- 限时活动 -->
         {{if d.acts && d.acts.length}}
         <div class="wg-acts">

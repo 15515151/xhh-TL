@@ -305,6 +305,16 @@ body {
   border-radius: 50%;
   background: var(--accent);
 }
+/* 任务清单状态点：已完成绿 / 未完成橙 / 未解锁灰 */
+.wg-act-dot.ok {
+  background: #7fd67f;
+}
+.wg-act-dot.no {
+  background: #ff8a6b;
+}
+.wg-act-dot.locked {
+  background: rgba(255, 255, 255, 0.3);
+}
 .wg-act-name {
   flex: 1;
   font-size: 18px;
