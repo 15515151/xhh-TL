@@ -34,6 +34,8 @@
 
 三种卡片样式（`tl_card_style`）：`classic` 经典多合一 / `portrait` 大立绘 / `widget` 桌面小组件。
 多账号合并出图，张数超 `tl_cards_per_msg` 自动转合并转发。数据取米游社实时便笺（优先 stoken）。
+原神卡片额外带一行**参量质变仪**状态（今日可使用 / N天后可再次使用 / 尚未获得），数据来自
+game_record 实时便笺接口，纯 stoken 凭证拉不到时该行自动隐藏。
 
 **鸣潮**需要同机的 gsuid_core + 鸣潮插件（只读借它的 UID 绑定与登录凭证），并在锅巴打开
 `waves_tl_enable`、用户自己发 `#开启鸣潮体力`；Windows 必须手填 `GsData.db` 路径。

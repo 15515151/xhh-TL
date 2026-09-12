@@ -252,6 +252,27 @@ function getTime(time) {
   return `${day}${hours}:${minutes}`;
 }
 
+/**
+ * 参量质变仪展示文案（dailyNote 的 transformer 原始结构 → { ok, text } 或 null）
+ * obtained=false 尚未获得；reached=true 冷却已到；其余按 rec_time 算天数，
+ * 与官方小组件同口径（剩余不满一天也记一天）。rec_time 为 "YYYY-MM-DD HH:mm:ss"，
+ * 兼容尝试一次 ISO 解析，仍认不出就整行隐藏（宁缺不显示错文案）。
+ */
+function formatTransformer(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.obtained === true) {
+    if (raw.reached) return { ok: true, text: '今日可使用' };
+    const str = String(raw.rec_time || '');
+    let rec = moment(str, 'YYYY-MM-DD HH:mm:ss');
+    if (!rec.isValid() && /\d/.test(str)) rec = moment(str);
+    if (!rec.isValid()) return null;
+    const days = Math.ceil(rec.diff(moment()) / 86400000);
+    return { ok: false, text: days > 0 ? `${days}天后可再次使用` : '今日可使用' };
+  }
+  if (raw.obtained === false) return { ok: false, text: '尚未获得' };
+  return null;
+}
+
 // ============ 主插件类 ============
 export class TL extends plugin {
   constructor(e) {
@@ -1025,6 +1046,7 @@ export class TL extends plugin {
     const done = (cur, max) => Number(max) > 0 && Number(cur) >= Number(max);
 
     let bars = [], stats = [], status = [];
+    let transformer = null;
     if (game === 'gs') {
       const resin = Number(item.current_resin) || 0;
       bars = [
@@ -1046,6 +1068,8 @@ export class TL extends plugin {
           ? { val: `${wap.period_progress_current || 0}/${wap.period_progress_total || 0}`, key: '砺行修远' }
           : { val: `${item.finished_task_num || 0}/${item.total_task_num || 0}`, key: '每日委托' },
       ];
+      // 参量质变仪：finishNote 已归一为 { ok, text }（widget 路径补拉，纯 cookie 路径自带）
+      transformer = item.transformerView || null;
     } else if (game === 'zzz') {
       const energy = item.energy?.progress || {};
       const cur = Number(energy.current) || 0;
@@ -1126,6 +1150,7 @@ export class TL extends plugin {
       bars,
       stats,
       status,
+      transformer,
       acts: this.buildActivities(game, item),
       pools: this.buildCardPools(game, item),
     };
@@ -1591,6 +1616,27 @@ export class TL extends plugin {
       } catch (err) {
         logger.debug?.(`[xhh-TL][act_calendar] ${err?.message}`);
       }
+    }
+
+    // 参量质变仪：widget 接口同样不带该字段，用本次请求同一把凭证（headers.Cookie，
+    // getstoken/pickUserCookie 已按 UID 匹配）走 game_record dailyNote 补齐，多号不串。
+    // 纯 cookie 兜底路径（noteViaCookie）的返回自带 transformer，无需重复请求。
+    // 纯 stoken 串调 dailyNote 会被拒（10001），此时质变仪整行不显示，静默不阻塞主流程。
+    if (game === 'gs' && !data.transformer && headers?.Cookie) {
+      try {
+        const api = new LiteMysApi(uid, headers.Cookie, { game: 'gs', log: false });
+        const noteRes = await api.getData('dailyNote');
+        if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
+          data.transformer = noteRes.data.transformer;
+        }
+      } catch (err) {
+        logger.debug?.(`[xhh-TL][transformer] ${err?.message}`);
+      }
+    }
+
+    // 归一成展示结构，classic / portrait / widget 三模板共用（无数据时为 null，模板整行隐藏）
+    if (game === 'gs') {
+      data.transformerView = formatTransformer(data.transformer);
     }
 
     return data;

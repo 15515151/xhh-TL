@@ -76,6 +76,15 @@
         </div>
         {{/if}}
 
+        <!-- 参量质变仪：官方小组件同款横条（数据来自 dailyNote，拉不到时整块隐藏） -->
+        {{if d.transformer}}
+        <div class="wg-acts wg-trans">
+          <div class="wg-trans-icon" style="background-image: url({{ppath}}Tl/imgs/参量质变仪.png)"></div>
+          <div class="wg-trans-name">参量质变仪</div>
+          <div class="wg-trans-sub {{d.transformer.ok ? 'ready' : ''}}">{{d.transformer.text}}</div>
+        </div>
+        {{/if}}
+
         <!-- 底部用户条 -->
         <div class="wg-footer">
           <img class="wg-avatar" src="https://q1.qlogo.cn/g?b=qq&s=640&nk={{qq}}.jpg" />

@@ -110,6 +110,16 @@
                 <span class="{{$value.expeditions_ ? 'red' : ''}}">{{$value.expeditions_ ? '已全部完成' : '未完成'}}</span>
               </div>
             </div>
+
+            {{if $value.transformerView}}
+            <div class="_box_">
+              <img src="{{ppath}}Tl/imgs/参量质变仪.png" />
+              <p>参量质变仪</p>
+              <div class="right_">
+                <span class="{{$value.transformerView.ok ? 'blue' : 'red'}}">{{$value.transformerView.text}}</span>
+              </div>
+            </div>
+            {{/if}}
           </div>
         </div>
       </div>

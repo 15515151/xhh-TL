@@ -288,7 +288,8 @@ strong {
 
 ._box .right_box {
   width: 355px;
-  height: 132px;
+  /* 原 height:132px 定死；gs 新增参量质变仪行后需随内容自然撑高，否则溢出被裁 */
+  min-height: 132px;
   margin-left: 4px;
   padding: 4px 12px 8px 12px;
 }
@@ -316,7 +317,8 @@ strong {
 ._box_ .right_ {
   position: absolute;
   right: 20px;
-  width: 80px;
+  /* 加宽到 110px：容下「6天后可再次使用」这类 9 字状态单行显示 */
+  width: 110px;
   text-align: right;
   font-size: 13px;
   font-weight: bold;

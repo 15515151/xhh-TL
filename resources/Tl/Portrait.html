@@ -27,6 +27,12 @@
         <span>{{s.text}}</span>
       </div>
       {{/each}}
+      {{if d.transformer}}
+      <div class="pt-status-item {{d.transformer.ok ? 'ok' : 'no'}}">
+        <span class="pt-dot">{{d.transformer.ok ? '✓' : '✕'}}</span>
+        <span>参量质变仪：{{d.transformer.text}}</span>
+      </div>
+      {{/if}}
     </div>
 
     <!-- 主体：恢复时间 + 三条进度 -->
