@@ -253,6 +253,19 @@ function getTime(time) {
 }
 
 /**
+ * 带过期时间的 redis.set:TRSS 是 node-redis v4(set(key, val, { EX: s })),
+ * 传统 Yunzai 是 ioredis(set(key, val, 'EX', s)),两种签名都试一遍。
+ */
+async function redisSetEx(key, val, ttl) {
+  try {
+    return await redis.set(key, val, { EX: ttl });
+  } catch (_) {}
+  try {
+    return await redis.set(key, val, 'EX', ttl);
+  } catch (_) {}
+}
+
+/**
  * 参量质变仪展示文案（dailyNote 的 transformer 原始结构 → { ok, text } 或 null）
  * 官方两种结构并存：
  * - 新：obtained + recovery_time = { Day, Hour, Minute, Second, reached }，剩余时间分段
@@ -260,8 +273,7 @@ function getTime(time) {
  * obtained=false 尚未获得；冷却已到显示「今日可使用」；其余按剩余时间算天数，
  * 与官方小组件同口径（剩余不满一天也记一天）。结构认不出就整行隐藏。
  */
-function formatTransformer(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+function formatTransformer(raw) {  if (!raw || typeof raw !== 'object') return null;
   if (raw.obtained === true) {
     const rt = raw.recovery_time;
     if (rt && typeof rt === 'object') {
@@ -1632,44 +1644,74 @@ export class TL extends plugin {
     // 参量质变仪：widget 接口同样不带该字段，用本次请求同一把凭证（headers.Cookie，
     // getstoken/pickUserCookie 已按 UID 匹配）走 game_record dailyNote 补齐，多号不串。
     // 该接口只认 ltoken/cookie_token：扫码用户的纯 stoken 串会被拒（10001），先用
-    // stokenToCookie 现场兑换（redis 缓存 1 小时，避免每次查询都多两发兑换请求）。
-    // 兑换失败或 dailyNote 报错时质变仪整行隐藏，静默不阻塞体力主流程。
+    // stokenToCookie 现场兑换。三道 redis 缓存把请求频率压到最低（game_record 有
+    // 1034 风控，高频必被拦）：
+    //   xhh:transformer_view:<stuid>  解析结果缓存 30 分钟（质变仪状态以天计）
+    //   xhh:transformer_ck:<stuid>    兑换出的 cookie_token 缓存 1 小时
+    //   xhh:transformer_cool:<stuid>  失败/风控冷却 10 分钟，期间不再发请求
     if (game === 'gs' && !data.transformer && headers?.Cookie) {
-      try {
-        let ck = headers.Cookie;
-        if (!/cookie_token=|ltoken=/.test(ck) && /stoken=/.test(ck)) {
-          const stuid = cookiePart(ck, 'stuid') || cookiePart(ck, 'ltuid') || '';
+      const stuid =
+        cookiePart(headers.Cookie, 'stuid') ||
+        cookiePart(headers.Cookie, 'ltuid') ||
+        cookiePart(headers.Cookie, 'account_id') || '';
+      if (stuid) {
+        try {
+          // 1) 结果缓存命中直接用（多号总览/重复查询零额外请求）
+          let view = null;
           let cached = null;
-          try { cached = await redis.get(`xhh:transformer_ck:${stuid}`); } catch (_) {}
+          try { cached = await redis.get(`xhh:transformer_view:${stuid}`); } catch (_) {}
           if (cached) {
-            ck = cached;
-          } else {
-            const converted = await stokenToCookie({
-              stuid,
-              stoken: cookiePart(ck, 'stoken'),
-              mid: cookiePart(ck, 'mid'),
-              ck_stoken: ck,
-            });
-            if (converted && /cookie_token=/.test(converted)) {
-              ck = converted;
-              try { await redis.set(`xhh:transformer_ck:${stuid}`, converted, 'EX', 3600); } catch (_) {}
-            } else {
-              ck = '';
-              logger.info?.('[xhh-TL][transformer] stoken 兑换 cookie_token 失败，质变仪行隐藏');
+            try { view = JSON.parse(cached); } catch (_) {}
+            if (!view || typeof view !== 'object' || typeof view.text !== 'string') view = null;
+          }
+
+          // 2) 冷却期内不重试
+          if (!view) {
+            let cooling = null;
+            try { cooling = await redis.get(`xhh:transformer_cool:${stuid}`); } catch (_) {}
+            if (!cooling) {
+              let ck = headers.Cookie;
+              // 3) 纯 stoken 串先兑换 cookie_token
+              if (!/cookie_token=|ltoken=/.test(ck) && /stoken=/.test(ck)) {
+                let cachedCk = null;
+                try { cachedCk = await redis.get(`xhh:transformer_ck:${stuid}`); } catch (_) {}
+                if (cachedCk) {
+                  ck = cachedCk;
+                } else {
+                  const converted = await stokenToCookie({
+                    stuid,
+                    stoken: cookiePart(ck, 'stoken'),
+                    mid: cookiePart(ck, 'mid'),
+                    ck_stoken: ck,
+                  });
+                  if (converted && /cookie_token=/.test(converted)) {
+                    ck = converted;
+                    redisSetEx(`xhh:transformer_ck:${stuid}`, converted, 3600).catch(() => {});
+                  } else {
+                    ck = '';
+                    logger.info?.('[xhh-TL][transformer] stoken 兑换 cookie_token 失败，质变仪行隐藏');
+                  }
+                }
+              }
+              // 4) dailyNote 补拉:成功缓存结果,失败进冷却
+              if (ck) {
+                const api = new LiteMysApi(uid, ck, { game: 'gs', log: false });
+                const noteRes = await api.getData('dailyNote');
+                if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
+                  data.transformer = noteRes.data.transformer;
+                  view = formatTransformer(data.transformer);
+                  if (view) redisSetEx(`xhh:transformer_view:${stuid}`, JSON.stringify(view), 1800).catch(() => {});
+                } else {
+                  redisSetEx(`xhh:transformer_cool:${stuid}`, '1', 600).catch(() => {});
+                  logger.info?.(`[xhh-TL][transformer] dailyNote 未取到: retcode=${noteRes?.retcode} ${noteRes?.message || ''}（冷却10分钟）`);
+                }
+              }
             }
           }
+          if (view) data.transformerView = view;
+        } catch (err) {
+          logger.debug?.(`[xhh-TL][transformer] ${err?.message}`);
         }
-        if (ck) {
-          const api = new LiteMysApi(uid, ck, { game: 'gs', log: false });
-          const noteRes = await api.getData('dailyNote');
-          if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
-            data.transformer = noteRes.data.transformer;
-          } else {
-            logger.info?.(`[xhh-TL][transformer] dailyNote 未取到: retcode=${noteRes?.retcode} ${noteRes?.message || ''}`);
-          }
-        }
-      } catch (err) {
-        logger.debug?.(`[xhh-TL][transformer] ${err?.message}`);
       }
     }
 
