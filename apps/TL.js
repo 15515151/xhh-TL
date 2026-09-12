@@ -5,7 +5,7 @@ import md5 from 'md5';
 import lodash from 'lodash';
 import plugin from '../../../lib/plugins/plugin.js';
 import { createUser } from '../utils/userBind.js';
-import { getstoken, cookiePart } from '../utils/auth.js';
+import { getstoken, cookiePart, stokenToCookie } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
 import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { extractRenderBuffer, toWebp } from '../utils/renderImage.js';
@@ -254,13 +254,24 @@ function getTime(time) {
 
 /**
  * 参量质变仪展示文案（dailyNote 的 transformer 原始结构 → { ok, text } 或 null）
- * obtained=false 尚未获得；reached=true 冷却已到；其余按 rec_time 算天数，
- * 与官方小组件同口径（剩余不满一天也记一天）。rec_time 为 "YYYY-MM-DD HH:mm:ss"，
- * 兼容尝试一次 ISO 解析，仍认不出就整行隐藏（宁缺不显示错文案）。
+ * 官方两种结构并存：
+ * - 新：obtained + recovery_time = { Day, Hour, Minute, Second, reached }，剩余时间分段
+ * - 旧：obtained + reached + rec_time（"YYYY-MM-DD HH:mm:ss" 绝对时刻）
+ * obtained=false 尚未获得；冷却已到显示「今日可使用」；其余按剩余时间算天数，
+ * 与官方小组件同口径（剩余不满一天也记一天）。结构认不出就整行隐藏。
  */
 function formatTransformer(raw) {
   if (!raw || typeof raw !== 'object') return null;
   if (raw.obtained === true) {
+    const rt = raw.recovery_time;
+    if (rt && typeof rt === 'object') {
+      const totalSec =
+        (((Number(rt.Day) || 0) * 24 + (Number(rt.Hour) || 0)) * 60 + (Number(rt.Minute) || 0)) * 60 +
+        (Number(rt.Second) || 0);
+      if (rt.reached || totalSec <= 0) return { ok: true, text: '今日可使用' };
+      const days = Math.max(1, Math.ceil(totalSec / 86400));
+      return { ok: false, text: `${days}天后可再次使用` };
+    }
     if (raw.reached) return { ok: true, text: '今日可使用' };
     const str = String(raw.rec_time || '');
     let rec = moment(str, 'YYYY-MM-DD HH:mm:ss');
@@ -1620,14 +1631,42 @@ export class TL extends plugin {
 
     // 参量质变仪：widget 接口同样不带该字段，用本次请求同一把凭证（headers.Cookie，
     // getstoken/pickUserCookie 已按 UID 匹配）走 game_record dailyNote 补齐，多号不串。
-    // 纯 cookie 兜底路径（noteViaCookie）的返回自带 transformer，无需重复请求。
-    // 纯 stoken 串调 dailyNote 会被拒（10001），此时质变仪整行不显示，静默不阻塞主流程。
+    // 该接口只认 ltoken/cookie_token：扫码用户的纯 stoken 串会被拒（10001），先用
+    // stokenToCookie 现场兑换（redis 缓存 1 小时，避免每次查询都多两发兑换请求）。
+    // 兑换失败或 dailyNote 报错时质变仪整行隐藏，静默不阻塞体力主流程。
     if (game === 'gs' && !data.transformer && headers?.Cookie) {
       try {
-        const api = new LiteMysApi(uid, headers.Cookie, { game: 'gs', log: false });
-        const noteRes = await api.getData('dailyNote');
-        if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
-          data.transformer = noteRes.data.transformer;
+        let ck = headers.Cookie;
+        if (!/cookie_token=|ltoken=/.test(ck) && /stoken=/.test(ck)) {
+          const stuid = cookiePart(ck, 'stuid') || cookiePart(ck, 'ltuid') || '';
+          let cached = null;
+          try { cached = await redis.get(`xhh:transformer_ck:${stuid}`); } catch (_) {}
+          if (cached) {
+            ck = cached;
+          } else {
+            const converted = await stokenToCookie({
+              stuid,
+              stoken: cookiePart(ck, 'stoken'),
+              mid: cookiePart(ck, 'mid'),
+              ck_stoken: ck,
+            });
+            if (converted && /cookie_token=/.test(converted)) {
+              ck = converted;
+              try { await redis.set(`xhh:transformer_ck:${stuid}`, converted, 'EX', 3600); } catch (_) {}
+            } else {
+              ck = '';
+              logger.info?.('[xhh-TL][transformer] stoken 兑换 cookie_token 失败，质变仪行隐藏');
+            }
+          }
+        }
+        if (ck) {
+          const api = new LiteMysApi(uid, ck, { game: 'gs', log: false });
+          const noteRes = await api.getData('dailyNote');
+          if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
+            data.transformer = noteRes.data.transformer;
+          } else {
+            logger.info?.(`[xhh-TL][transformer] dailyNote 未取到: retcode=${noteRes?.retcode} ${noteRes?.message || ''}`);
+          }
         }
       } catch (err) {
         logger.debug?.(`[xhh-TL][transformer] ${err?.message}`);
