@@ -104,7 +104,7 @@ export function buildHelpGroups() {
         {
           icon: 'ww-01.webp',
           title: '#鸣潮体力 #mctl',
-          desc: '库街区数据 + 本插件模板出图；凭证借 gsuid_core 鸣潮插件，需锅巴先开「启用鸣潮体力」',
+          desc: '库街区数据 + 本插件模板出图；需主人先启用并登录鸣潮',
         },
         {
           icon: 'multi.webp',
@@ -139,7 +139,7 @@ export function buildHelpGroups() {
         {
           icon: 'ww-02.webp',
           title: '#开启鸣潮体力推送 200',
-          desc: '结晶波片达阈值时在群@你发图；需锅巴开「启用鸣潮体力」；关闭：#关闭鸣潮体力推送',
+          desc: '结晶波片达阈值时在群@你发图；需主人先启用鸣潮；关闭：#关闭鸣潮体力推送',
         },
         {
           icon: 'gs-枫原万叶.webp',
@@ -383,17 +383,17 @@ export function buildHelpGroups() {
         {
           icon: 'sr-银狼.webp',
           title: '*版本虚构 *下期虚构',
-          desc: '虚构叙事（maze_extra / story）',
+          desc: '虚构叙事',
         },
         {
           icon: 'sr-刃.webp',
           title: '*版本末日 *下期末日',
-          desc: '末日幻影（maze_boss）',
+          desc: '末日幻影',
         },
         {
           icon: 'sr-星期日.webp',
           title: '*版本异相 *下期异相',
-          desc: '异相仲裁（maze_peak）',
+          desc: '异相仲裁',
         },
         {
           icon: 'sr-黑天鹅.webp',
@@ -447,7 +447,7 @@ export class help extends plugin {
   async help(e) {
     try {
       if (!e.runtime?.render) {
-        return e.reply('渲染引擎不可用（e.runtime.render）', quoteEnabled())
+        return e.reply('出图服务不可用，请稍后重试', quoteEnabled())
       }
 
       const rawGroups = buildHelpGroups()
@@ -456,9 +456,9 @@ export class help extends plugin {
       const cmdCount = groups.reduce((n, g) => n + (g.list?.length || 0), 0)
       const version = readVersion()
       const note =
-        '<b>提示</b>：指令大多可省略 #；星铁相关请带 <b>*</b> 或「星铁」前缀，避免与原神冲突。' +
-        'Nanoka 版本指令支持 <b>列表 / 上期 / 第N期</b>；个人成绩类需绑定 Cookie / stoken。' +
-        '鸣潮体力需锅巴开启「启用鸣潮体力」，并已在 gsuid_core 鸣潮插件登录过。' +
+        '<b>提示</b>：指令大多可省略 #；星铁相关请带 <b>*</b> 或「星铁」前缀。' +
+        '版本指令支持 <b>列表 / 上期 / 第N期</b>；个人成绩类需先绑定账号。' +
+        '鸣潮体力需主人先启用并登录鸣潮。' +
         '支持 @他人查询（对方需已绑定）。'
 
       const bgImage = pickHelpBgImage({ logTag: 'xhh-TL[help]' })
@@ -499,7 +499,7 @@ export class help extends plugin {
       return e.reply(segment.image(image))
     } catch (err) {
       logger?.error?.('[xhh-TL][help]', err)
-      return e.reply(`帮助图渲染失败：${err.message || err}`, quoteEnabled())
+      return e.reply(`帮助图渲染失败，请稍后重试`, quoteEnabled())
     }
   }
 }

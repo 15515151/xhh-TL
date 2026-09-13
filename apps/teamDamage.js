@@ -454,7 +454,7 @@ export class teamDamage extends plugin {
       return replyQuote(e, segment.image(image))
     } catch (err) {
       logger.error('[xhh][teamDamage] 帮助渲染失败:', err)
-      return e.reply(`渲染失败：${err.message || err}`)
+      return e.reply(`渲染失败，请稍后重试`)
     }
   }
 
@@ -512,7 +512,7 @@ export class teamDamage extends plugin {
       const { name, mods, unknown } = parseMember(token)
       const char = Character.get(name)
       if (!char || char.game !== 'gs') {
-        await e.reply(`认不出角色「${name}」`, quoteEnabled())
+        await e.reply(`认不出角色「${name}」，写全名或常用别名试试`, quoteEnabled())
         return true
       }
       if (TRAVELER.includes(char.name)) {
@@ -595,13 +595,10 @@ export class teamDamage extends plugin {
 
     const res = await requestTeamDamage(requestBody, (config().team_damage_timeout ?? 20) * 1000)
     if (!res.ok) {
-      // 「暂不支持该队伍」是小助手自己的配队库没收录这套，跟角色认不认识无关（实测：
-      // 闲云 / 伊安珊 / 夏沃蕾 单独配常规队都能算，但两三个功能位凑一队就会被拒），
-      // 直接抛原文用户会以为是插件不认角色，这里补一句说明
+      // 「暂不支持该队伍」是小助手自己的配队库没收录这套，跟角色认不认识无关
       if (/暂不支持该队伍/.test(res.msg || '')) {
         await e.reply(
           `小助手算不了这套队：${team.map((t) => t.name).join('|')}\n` +
-            '它只收录了部分配队套路，队里功能位太多、或没有它认得的主 C 时就会拒绝（角色本身是认识的）。\n' +
             '把其中一位换成明确的输出位再试试~',
           true,
         )
@@ -649,7 +646,7 @@ export class teamDamage extends plugin {
       return replyQuote(e, segment.image(image))
     } catch (err) {
       logger.error('[xhh][teamDamage] 渲染失败:', err)
-      return e.reply(`渲染失败：${err.message || err}`)
+      return e.reply(`渲染失败，请稍后重试`)
     }
   }
 }

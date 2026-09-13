@@ -390,7 +390,7 @@ export async function runCoinTask(account, opts = {}) {
   const base = { stuid, before: 0, after: 0, gained: 0, rows: [] }
 
   if (!stuid || !account.cookie) {
-    return { ...base, code: 'expired', msg: '缺少 stoken' }
+    return { ...base, code: 'expired', msg: '登录信息缺失，请【#扫码登录】' }
   }
 
   const picked = await pickLiveCredential(account)
@@ -412,7 +412,7 @@ export async function runCoinTask(account, opts = {}) {
     log.mark(
       `[xhh-TL][米游币] ${stuid} 查询任务态失败：retcode=${before.res?.retcode} ${before.res?.message || ''}`,
     )
-    return { ...base, code: 'fail', msg: `查询米游币失败：${before.res?.message || '未知错误'}` }
+    return { ...base, code: 'fail', msg: `查询米游币失败，请稍后重试` }
   }
   base.before = before.total
   base.after = before.total
@@ -453,7 +453,7 @@ export async function runCoinTask(account, opts = {}) {
         if (passed) signRes = await signForum(cookie, device, deviceFp, forum.gids)
       }
       if (isExpired(signRes)) {
-        row.err = 'stoken 失效'
+        row.err = '登录失效'
         base.rows.push(row)
         diedMidway = true
         break
@@ -463,8 +463,8 @@ export async function runCoinTask(account, opts = {}) {
       row.signed = rc === 0 || rc === -5003
       row.already = rc === -5003
       if (row.already) row.err = '已签过'
-      else if (!row.signed && isCaptcha(signRes)) row.err = '验证码'
-      else if (!row.signed && isBadSign(signRes)) row.err = '签名被拒'
+      else if (!row.signed && isCaptcha(signRes)) row.err = '需要验证'
+      else if (!row.signed && isBadSign(signRes)) row.err = '请求被拒'
       await jitter()
 
       // 2.2 拉帖子列表
@@ -529,7 +529,7 @@ export async function runCoinTask(account, opts = {}) {
 /** 只查余额，不做任务 */
 export async function queryCoin(account) {
   const { stuid, cookie } = account
-  if (!stuid || !cookie) return { ok: false, msg: '缺少 stoken' }
+  if (!stuid || !cookie) return { ok: false, msg: '登录信息缺失，请【#扫码登录】' }
   const { missions: r } = await pickLiveCredential(account)
   if (!r.ok) {
     return {

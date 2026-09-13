@@ -670,7 +670,7 @@ export class gsAllAbyss extends plugin {
       return e.reply(
         mys
           ? `UID: ${mys.uid} Cookie 失效，请【#刷新ck】，仍不行则【#扫码登录】`
-          : '请绑定 Cookie 后再使用 #全部深渊',
+          : '请先【#扫码登录】后再使用 #全部深渊',
       )
     }
     const uid = mys.uid
@@ -697,7 +697,7 @@ export class gsAllAbyss extends plugin {
       ])
     } catch (err) {
       logger.error('[xhh][gsAllAbyss] 拉取失败:', err)
-      return e.reply(`获取失败：${err?.message || err}`)
+      return e.reply(`获取失败，请稍后重试`)
     }
 
     if (resDetail?.avatars?.length > 3) {
@@ -860,7 +860,7 @@ export class gsAllAbyss extends plugin {
       return replyQuote(e, segment.image(image))
     } catch (err) {
       logger.error('[xhh][gsAllAbyss] 渲染失败:', err)
-      return e.reply(`渲染失败：${err.message || err}`)
+      return e.reply(`渲染失败，请稍后重试`)
     }
   }
 }

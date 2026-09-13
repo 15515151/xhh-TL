@@ -162,7 +162,7 @@ export class autoSign extends plugin {
     const lines = [`${label}签到结果：`]
     for (const r of results) lines.push(`· ${r.uid}：${r.msg}`)
     if (results.some((r) => r.code === 'captcha')) {
-      lines.push(`（部分账号触发验证码，过码未成功；请稍后重发 #${label}签到，撞码时按提示点链接手动划过）`)
+      lines.push(`（部分账号撞验证码，请重发 #${label}签到，按提示点链接手动划过）`)
     }
     e.reply(lines.join('\n'), quoteEnabled())
     return true
@@ -176,7 +176,7 @@ export class autoSign extends plugin {
     if (this._disabled(e)) return true
     const verifyAddr = config().auto_sign_verify_addr || ''
     if (!verifyAddr) {
-      e.reply('未配置过码服务地址（auto_sign_verify_addr），无法手动过码~', quoteEnabled())
+      e.reply('未配置过码服务地址，请主人到锅巴里填上后再试~', quoteEnabled())
       return true
     }
 
@@ -226,7 +226,7 @@ export class autoSign extends plugin {
         } catch (_) {}
 
         const ok = await runBbsVerify(e, { uid: realUid, cookie: auth.ck, game, device, deviceFp, verifyAddr })
-        lines.push(`· ${realUid}：${ok ? '过码成功，可去签到了' : '过码未成功（超时/取消/服务不可用）'}`)
+        lines.push(`· ${realUid}：${ok ? '过码成功，可去签到了' : '过码未成功，请稍后重试'}`)
       } catch (err) {
         logger?.error?.(`[xhh-TL][过码] ${e.user_id}/${uid} 异常: ${err.message}`)
         lines.push(`· ${uid}：过码异常`)
@@ -261,7 +261,7 @@ export class autoSign extends plugin {
       logger?.error?.(`[xhh-TL][自动签到] 枚举 UID 失败 ${e.user_id}: ${err.message}`)
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${label}账号（或名下 UID 均无有效 CK），请先【#扫码登录】米游社后再开启自动签到~`, quoteEnabled())
+      e.reply(`你还没有绑定${label}账号，请先【#扫码登录】米游社后再开启自动签到~`, quoteEnabled())
       return true
     }
 
@@ -269,7 +269,7 @@ export class autoSign extends plugin {
     subs[game][String(e.user_id)] = { group: String(e.group_id) }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${label}每日自动签到（名下 ${uidList.length} 个 UID）\n每天将自动签到，本群统一发送签到汇总图\n发送 #${label}签到 可立即签一次`,
+      `✅ 已开启${label}每日自动签到（名下 ${uidList.length} 个 UID）\n发送 #${label}签到 可立即签一次`,
       true,
     )
     return true

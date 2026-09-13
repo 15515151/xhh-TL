@@ -230,7 +230,7 @@ export class miniRoleCombat extends plugin {
       return e.reply(
         mys
           ? `UID: ${mys.uid} Cookie 失效，请【#刷新ck】，仍不行则【#扫码登录】`
-          : `请绑定 Cookie 后再使用 #小剧诗`,
+          : `请先【#扫码登录】后再使用 #小剧诗`,
       )
     }
 
@@ -248,13 +248,13 @@ export class miniRoleCombat extends plugin {
       }
       resDetail = await mys.getCharacter()
       if (!resDetail?.avatars || resDetail.avatars.length <= 3) {
-        return e.reply('角色信息获取失败')
+        return e.reply('角色信息获取失败，请稍后重试')
       }
       delete resDetail._res
       delete resRole._res
     } catch (err) {
       logger.error('[xhh][miniRoleCombat] 拉取剧诗失败:', err)
-      return e.reply(`获取失败：${err?.message || err}`)
+      return e.reply(`获取失败，请稍后重试`)
     }
 
     player.setMysCharData(resDetail)
@@ -320,7 +320,7 @@ export class miniRoleCombat extends plugin {
     const stages = buildKeyStages(lvs, avatarDataMap)
     if (!stages.length) {
       return e.reply(
-        `${periodText}尚未通关关键关卡（第 3/6/8/10 幕或圣牌），或数据为空。`,
+        `${periodText}还没通关关键关卡（第 3/6/8/10 幕或圣牌）`,
       )
     }
 
@@ -376,7 +376,7 @@ export class miniRoleCombat extends plugin {
       return e.reply('渲染失败，请稍后再试')
     } catch (err) {
       logger.error('[xhh][miniRoleCombat] 渲染失败:', err)
-      return e.reply(`渲染失败：${err.message || err}`)
+      return e.reply(`渲染失败，请稍后重试`)
     }
   }
 }

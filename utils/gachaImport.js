@@ -101,7 +101,7 @@ function parseJson(text) {
   try {
     json = JSON.parse(String(text).replace(/^﻿/, ''))
   } catch (err) {
-    throw new Error(`JSON 解析失败：${err.message}`)
+    throw new Error(`文件解析失败，请检查文件格式`)
   }
 
   if (Array.isArray(json)) {
@@ -153,7 +153,7 @@ function parseJson(text) {
   }
   const keys = Object.keys(json).slice(0, 8).join(', ')
   throw new Error(
-    `不认识的 JSON 结构（顶层字段：${keys || '空'}），支持 SRGF v1.0 / UIGF v2.x / UIGF v4.x / Excel`,
+    `不认识的 JSON 结构，支持 SRGF v1.0 / UIGF v2.x / UIGF v4.x / Excel`,
   )
 }
 

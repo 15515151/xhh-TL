@@ -2179,7 +2179,7 @@ export class nanokaAbyss extends plugin {
           true,
         )
       } catch (err) {
-        return e.reply(`获取列表失败：${err.message}`, quoteEnabled())
+        return e.reply(`获取列表失败，请稍后重试`, quoteEnabled())
       }
     }
     return this.renderMode(e, () => loadGiTower(listOffset(msg), channel), 'gi-tower')
@@ -2198,7 +2198,7 @@ export class nanokaAbyss extends plugin {
       try {
         const lines = await listPeriods('gi-leyline', channel)
         return e.reply(
-          `幽境危战（${channelLabel(channel)}）最近期数：\n${lines.join('\n')}\n——\n#版本危战=当期 · #下期危战=下一期 · 数据 lunaris.moe`,
+          `幽境危战（${channelLabel(channel)}）最近期数：\n${lines.join('\n')}\n——\n#版本危战=当期 · #下期危战=下一期`,
           true,
         )
       } catch (err) {
@@ -2207,7 +2207,7 @@ export class nanokaAbyss extends plugin {
     }
     return this.renderMode(e, () => loadGiLeyline(listOffset(msg), channel), 'gi-leyline', {
       tpl: 'leyline_luna',
-      progress: '正在从 lunaris.moe 拉取幽境危战数据…',
+      progress: '正在拉取幽境危战数据…',
       baseScale: 1.3,
     })
   }
@@ -2242,7 +2242,7 @@ export class nanokaAbyss extends plugin {
           true,
         )
       } catch (err) {
-        return e.reply(`获取列表失败：${err.message}`, quoteEnabled())
+        return e.reply(`获取列表失败，请稍后重试`, quoteEnabled())
       }
     }
     return this.renderMode(
@@ -2261,12 +2261,12 @@ export class nanokaAbyss extends plugin {
       data = await hydrateIcons(data)
     } catch (err) {
       logger?.error?.('[xhh-TL][nanokaAbyss]', err)
-      return e.reply(`数据获取失败：${err.message || err}`, quoteEnabled())
+      return e.reply(`数据获取失败，请稍后重试`, quoteEnabled())
     }
 
     try {
       if (!e.runtime?.render) {
-        return e.reply('渲染引擎不可用（e.runtime.render）', quoteEnabled())
+        return e.reply('出图服务不可用，请稍后重试', quoteEnabled())
       }
       const buf = await this.renderToBuffer(
         e,
@@ -2281,7 +2281,7 @@ export class nanokaAbyss extends plugin {
       return this.sendImage(e, buf)
     } catch (err) {
       logger?.error?.('[xhh-TL][nanokaAbyss] render', err)
-      return e.reply(`渲染失败：${err.message}`, quoteEnabled())
+      return e.reply(`渲染失败，请稍后重试`, quoteEnabled())
     }
   }
 
@@ -2462,7 +2462,7 @@ export class nanokaAbyss extends plugin {
           .toBuffer()
         return await replyQuote(e, segment.image(fallback))
       } catch (err2) {
-        return e.reply(`发图失败（图片可能过大）：${err2.message || err.message}`)
+        return e.reply(`发图失败，请稍后重试`)
       }
     }
   }

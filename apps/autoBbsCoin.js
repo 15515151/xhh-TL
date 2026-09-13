@@ -165,7 +165,7 @@ export class autoBbsCoin extends plugin {
       .map((g) => FORUMS[g].name)
       .join('/')
     e.reply(
-      `✅ 已开启每日自动米游币（名下 ${accounts.length} 个米游社账号）\n版块：${games}\n每天将自动做任务，本群统一发送汇总图\n发送 #米游币签到 可立即跑一次`,
+      `✅ 已开启每日自动米游币（名下 ${accounts.length} 个米游社账号）\n版块：${games}\n发送 #米游币签到 可立即跑一次`,
       true,
     )
     return true
@@ -239,7 +239,7 @@ export class autoBbsCoin extends plugin {
 
     const games = resolveGames()
     e.reply(
-      `开始米游币任务：${accounts.length} 个账号 × ${games.length} 个版块，预计 ${this._estimate(accounts.length, games.length)}内完成，请稍候~`,
+      `开始米游币任务：${accounts.length} 个账号 × ${games.length} 个版块，请稍候~`,
       true,
     )
 
@@ -408,12 +408,12 @@ export class autoBbsCoin extends plugin {
     if (!agg.participants.size) {
       note = '本群无可用米游社账号，请发送 #扫码登录 绑定'
     } else if (!rows.length) {
-      note = '无可渲染版块，请检查 bbs_coin_games 配置'
+      note = '无可渲染版块，请主人检查米游币版块配置'
     } else {
       const idle = !rows.some((r) => r.signed || r.read || r.vote || r.share)
       if (idle) {
         note = agg.failed
-          ? '本次未能完成，多为 stoken 失效或撞风控，可发送 #米游币签到 重试'
+          ? '本次未能完成，可发送 #米游币签到 重试'
           : '今日米游币已拿满，无需重复任务'
       }
     }

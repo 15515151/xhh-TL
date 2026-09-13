@@ -198,7 +198,7 @@ export async function listWavesAccounts(qq, cfg = config()) {
       busy = isBusyError(err)
       envError = busy
         ? 'gsuid_core 数据库正忙（被 core 那边写占住了），稍等一下再试'
-        : `读取 gsuid_core 数据库失败（${err?.code || err?.name || 'SQLite'}）`
+        : `鸣潮数据读取失败，请稍后重试`
       log().warn?.(
         `[xhh-TL][鸣潮体力] 读取数据库${busy ? '被锁（重试后仍失败）' : '失败'}：${file}（${driver.name}）` +
           `(${err?.code || err?.name || 'SQLite'}: ${err?.message || err})`,
@@ -339,14 +339,14 @@ export async function fetchWavesStamina(acc, timeoutMs = 15000) {
       }
       lastErr = res.msg || '库街区返回异常'
     } catch (err) {
-      lastErr = err?.name === 'AbortError' ? '库街区响应超时' : `库街区请求失败：${err?.message || err}`
+      lastErr = err?.name === 'AbortError' ? '库街区响应超时' : `库街区请求失败，请稍后重试`
       // 超时/网络故障时 getData 大概率同样打不通，但便宜，还是试一把
     }
     if (url === MR_REFRESH_URL) {
       log().debug?.(`[xhh-TL][鸣潮体力] ${acc.uid} refresh 未成功（${lastErr}），退回 getData 缓存`)
     }
   }
-  if (!daily) return lastErr || '库街区返回异常'
+  if (!daily) return lastErr || '库街区返回异常，请稍后重试'
 
   // baseData 是补充信息，坏了就用小组件接口里已有的部分
   let base = null

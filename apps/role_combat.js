@@ -267,12 +267,12 @@ export class role_combat extends plugin {
       payload = await loadRoleCombat(requestedMonth);
     } catch (err) {
       logger.error('[xhh][role_combat] 获取Nanoka数据失败:', err);
-      return e.reply(`幻想真境剧诗数据获取失败：${err.message || err}`);
+      return e.reply(`幻想真境剧诗数据获取失败，请稍后重试`);
     }
     const data = extractCharacters(payload.raw);
     const monsters = extractMonsters(payload.raw);
     if (!data.elements.length || !data.opening.length || !data.invite.length) {
-      return e.reply('本期幻想真境剧诗数据不完整，请稍后再试或更换数据源。');
+      return e.reply('本期幻想真境剧诗数据不完整，请稍后再试');
     }
 
     // 获取查询目标的角色列表并过滤

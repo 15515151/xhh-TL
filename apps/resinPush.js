@@ -246,8 +246,8 @@ export class resinPush extends plugin {
     }
     if (!(await listWavesAccounts(qq)).length) {
       const envErr = getWavesEnvError()
-      if (envErr) return `鸣潮体力暂时不可用：${envErr}`
-      return '没有可用的鸣潮账号，请先在 gsuid_core 的鸣潮插件里登录（如「w登录」）后再开启推送~'
+      if (envErr) return `鸣潮体力暂时不可用，请稍后重试`
+      return '没有可用的鸣潮账号，请先发「w登录」登录鸣潮后再开启推送~'
     }
     return null
   }
@@ -257,9 +257,9 @@ export class resinPush extends plugin {
     const meta = GAME_META[game]
     if (game === 'ww') {
       if (item === '没有') {
-        return '没有可用的鸣潮账号，请先在 gsuid_core 的鸣潮插件里登录（如「w登录」）后再开启推送~'
+        return '没有可用的鸣潮账号，请先发「w登录」登录鸣潮后再开启推送~'
       }
-      return `鸣潮体力查询失败：${item || '未知错误'}\n请确认库街区登录仍有效（可重新「w登录」）后再试~`
+      return `鸣潮体力查询失败，请重新「w登录」后再试~`
     }
     if (item === '没有') {
       return `你还没有绑定${meta.label}账号，请先【#扫码登录】米游社后再开启体力推送~`
@@ -326,7 +326,7 @@ export class resinPush extends plugin {
     }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${meta.label}体力推送\n当${meta.unit} ≥ ${threshold} 时，会在本群@你并发送体力图\n（达到后只提醒一次，回落后自动重新监控）${hadAll ? `\n（已自动关闭原${meta.label}体力全推送，两者互斥）` : ''}`,
+      `✅ 已开启${meta.label}体力推送\n当${meta.unit} ≥ ${threshold} 时，会在本群@你并发送体力图\n（达到后只提醒一次，回落后自动重新监控）${hadAll ? `\n（已自动关闭原${meta.label}体力全推送）` : ''}`,
       true,
     )
     return true
@@ -393,7 +393,7 @@ export class resinPush extends plugin {
     if (!validUids.length) {
       e.reply(
         game === 'ww'
-          ? '暂时查不到你的鸣潮体力，请确认库街区登录仍有效（可重新「w登录」）'
+          ? '暂时查不到你的鸣潮体力，请重新「w登录」后再试'
           : `暂时查不到你的${meta.label}体力，请试【#刷新ck】，仍不行则【#扫码登录】`,
         true,
       )
@@ -413,7 +413,7 @@ export class resinPush extends plugin {
     }
     saveSubs(subs)
     e.reply(
-      `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）${hadMain ? `\n（已自动关闭原${meta.label}体力推送，两者互斥）` : ''}`,
+      `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）${hadMain ? `\n（已自动关闭原${meta.label}体力推送）` : ''}`,
       true,
     )
     return true
@@ -685,7 +685,10 @@ export class resinPush extends plugin {
   async queryItem(tl, game, { qq, groupId, uid = null, e = null } = {}) {
     if (game === 'ww') return this.queryWaves(qq, uid)
     const ev = e || this.makeFakeE(qq, groupId)
-    return tl.note(ev, game, true, null, uid)
+    // allowDetail=false：定时轮询不补拉「要额外打接口」的明细（原神质变仪走 dailyNote，
+    // 该接口有风控且按 cron 反复打毫无意义）。明细只在用户主动查询时才发请求，
+    // 这里仍会命中用户查询留下的 30 分钟缓存，所以推送图该有还是有。
+    return tl.note(ev, game, true, null, uid, { allowDetail: false })
   }
 
   /** 鸣潮体力：uid 为空时取绑定列表第一个（主 UID）；返回 item 或错误说明字符串 */

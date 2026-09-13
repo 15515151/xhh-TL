@@ -101,7 +101,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
   const label = GAME_LABEL[game] || game
   const actId = SIGN_ACT_ID[game]
   if (!actId) return { code: 'fail', msg: `不支持的游戏: ${game}`, game, uid }
-  if (!uid || !cookie) return { code: 'expired', msg: '缺少 uid 或 cookie', game, uid }
+  if (!uid || !cookie) return { code: 'expired', msg: '登录信息不完整，请【#扫码登录】', game, uid }
 
   const server = getServer(String(uid), game)
 
@@ -176,7 +176,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
       return { code: 'already', msg: `${label} 已经签到过了，请勿重复签到`, game, uid }
     }
     if (isCaptcha(signRes)) {
-      return { code: 'captcha', msg: `${label} 签到触发验证码`, game, uid }
+      return { code: 'captcha', msg: `${label} 签到触发验证码，请稍后重试`, game, uid }
     }
     if ([-100, -101, 10001, -10001].includes(rc)) {
       return { code: 'expired', msg: `${label} 登录已失效，请【#刷新ck】，仍不行则【#扫码登录】`, game, uid }
@@ -188,10 +188,10 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
     if (rc === 0) {
       return { code: 'ok', msg: `${label} 签到成功`, game, uid }
     }
-    return { code: 'fail', msg: `${label} 签到失败：${signRes?.message || '未知错误'}(${rc})`, game, uid }
+    return { code: 'fail', msg: `${label} 签到失败，请稍后重试`, game, uid }
   } catch (err) {
     log.error(`[xhh-TL][sign] sign 请求异常 ${uid}: ${err?.message}`)
-    return { code: 'fail', msg: `${label} 签到请求异常`, game, uid }
+    return { code: 'fail', msg: `${label} 签到请求异常，请稍后重试`, game, uid }
   }
 }
 

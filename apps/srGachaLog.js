@@ -1446,7 +1446,7 @@ export class srGachaLog extends plugin {
       linkUid = await probeLinkUid(params)
     } catch (err) {
       logger?.error?.(`[xhh-TL][抽卡记录] 链接探测失败：${err.stack || err.message}`)
-      await this.reply(`这条链接用不了：${err.message}${recall}`, false, { at: true })
+      await this.reply(`这条链接用不了，换个链接试试${recall}`, false, { at: true })
       return true
     }
     if (!linkUid) {
@@ -1513,7 +1513,7 @@ export class srGachaLog extends plugin {
         }
       }
       await this.reply(
-        `没拉完就中断了：${err.message}` +
+        `没拉完就中断了` +
           (saved ? `。已经拿到的 ${saved} 条存好了，再发一次链接会接着拉` : ''),
         false,
         { at: true },
@@ -1618,7 +1618,7 @@ export class srGachaLog extends plugin {
       await (first ? this.renderAll(realUid) : this.renderMini(realUid))
     } catch (err) {
       logger?.error?.(`[xhh-TL][抽卡记录] ${uid} 更新失败：${err.stack || err.message}`)
-      await this.reply(`崩铁抽卡记录更新失败：${err.message}`, false, { at: true })
+      await this.reply(`崩铁抽卡记录更新失败，请稍后重试`, false, { at: true })
     }
     return true
   }
@@ -1634,7 +1634,7 @@ export class srGachaLog extends plugin {
     try {
       file = await fetchImportFile(this.e)
     } catch (err) {
-      await this.reply(`取文件失败：${err.message}`, false, { at: true })
+      await this.reply(`取文件失败，请重新发一次`, false, { at: true })
       return true
     }
     if (file) return this.doImport(file)
@@ -1661,7 +1661,7 @@ export class srGachaLog extends plugin {
     try {
       file = await fetchImportFile(this.e)
     } catch (err) {
-      await this.reply(`取文件失败：${err.message}`, false, { at: true })
+      await this.reply(`取文件失败，请重新发一次`, false, { at: true })
       return true
     }
     if (!file) {
@@ -1749,7 +1749,7 @@ export class srGachaLog extends plugin {
       await (first ? this.renderAll(uid) : this.renderMini(uid))
     } catch (err) {
       logger?.error?.(`[xhh-TL][抽卡记录] 导入失败：${err.stack || err.message}`)
-      await this.reply(`导入失败：${err.message}`, false, { at: true })
+      await this.reply(`导入失败，请稍后重试`, false, { at: true })
     }
     return true
   }

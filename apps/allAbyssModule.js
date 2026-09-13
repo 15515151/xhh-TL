@@ -560,7 +560,7 @@ export async function allAbyss(e) {
       // 加载 miao-plugin 模块
       const loaded = await loadMiaoModules();
       if (!loaded || !MysApi || !Common) {
-        e.reply('miao-plugin 模块加载失败，请检查插件是否正确安装');
+        e.reply('已知问题，稍后重试');
         return false;
       }
 

@@ -151,7 +151,7 @@ export async function requestTeamDamage(body, timeout = 20000) {
     clearTimeout(timer)
     text = await res.text()
   } catch (err) {
-    return { ok: false, msg: `提瓦特小助手接口请求失败：${err?.message || err}` }
+    return { ok: false, msg: `提瓦特小助手请求失败，请稍后重试` }
   }
 
   // 手法里出现服务端不支持的动作时，PHP 直接崩掉、返回空 body
@@ -162,7 +162,7 @@ export async function requestTeamDamage(body, timeout = 20000) {
   try {
     json = JSON.parse(text)
   } catch (_) {
-    return { ok: false, msg: '提瓦特小助手返回了无法解析的内容' }
+    return { ok: false, msg: '提瓦特小助手返回异常，请稍后重试' }
   }
   if (json.code !== 200 || !json.result) {
     return { ok: false, msg: json.info || json.tips || '提瓦特小助手接口返回错误' }

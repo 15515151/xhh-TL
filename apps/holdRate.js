@@ -158,7 +158,7 @@ export class holdRate extends plugin {
       return replyQuote(e, segment.image(image))
     } catch (err) {
       logger.error('[xhh][holdRate] 渲染失败:', err)
-      return e.reply(`渲染失败：${err.message || err}`)
+      return e.reply(`渲染失败，请稍后重试`)
     }
   }
 }

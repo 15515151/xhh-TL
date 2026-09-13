@@ -391,7 +391,7 @@ export class TL extends plugin {
     const isWaves = /^\s*(?:#|\*|%)*(?:鸣潮|mc)(?:体力|tl)\s*$/i.test(e.msg || '');
     if (isWaves) {
       if (!isWavesTlEnabled()) {
-        await replyQuote(e, '鸣潮体力未启用，请在锅巴「小火花体力小组件」里打开「启用鸣潮体力」');
+        await replyQuote(e, '鸣潮体力未启用，请主人到锅巴「小火花体力小组件」里打开「启用鸣潮体力」');
         return true;
       }
       const res = await this.getWavesList(e, targetQq || e.user_id);
@@ -399,8 +399,8 @@ export class TL extends plugin {
         await replyQuote(e, res.hiddenAll
           ? '你已屏蔽全部鸣潮 UID 的体力显示，发【#体力屏蔽列表】看看，或【#开启鸣潮<UID>】恢复'
           : res.error === '没有'
-            ? '没有可用的鸣潮账号，请先在 gsuid_core 的鸣潮插件里登录（如「w登录」）'
-            : `鸣潮体力查询失败：${res.error}`);
+            ? '没有可用的鸣潮账号，请先发「w登录」登录鸣潮'
+            : `鸣潮体力查询失败，请稍后重试`);
         return true;
       }
     }
@@ -464,7 +464,7 @@ export class TL extends plugin {
         wavesRes.error !== '没有' &&
         !wavesRes.hiddenAll
       ) {
-        e.reply(`鸣潮体力这次没取到：${wavesRes.error}`, quoteEnabled());
+        e.reply(`鸣潮体力这次没取到，请稍后重试`, quoteEnabled());
       }
     } else if (isWaves) {
       const res = await this.getWavesList(e, targetQq || e.user_id);
@@ -805,7 +805,7 @@ export class TL extends plugin {
     const { error, stdout, stderr } = await execAsync(cmd);
     if (error) {
       logger.error(`[xhh-TL] 更新失败: ${stderr || error.message}`);
-      e.reply(`xhh-TL 更新失败: ${stderr || error.message}`, quoteEnabled());
+      e.reply(`xhh-TL 更新失败，请稍后重试`, quoteEnabled());
       return true;
     }
     if (/Already up|已经是最新/.test(stdout)) {
@@ -817,7 +817,7 @@ export class TL extends plugin {
       `git -C ${pluginDir} log -1 --format="%cd" --date=format:"%m-%d %H:%M"`,
     );
     const time = timeOut.trim() || '未知';
-    e.reply(`xhh-TL 更新成功！\n更新时间: ${time}\n请重启以应用更新`, quoteEnabled());
+    e.reply(`xhh-TL 更新成功！\n更新时间: ${time}\n请主人重启云崽以应用更新`, quoteEnabled());
 
     // 合并转发本次更新日志
     try {
@@ -874,11 +874,11 @@ export class TL extends plugin {
     const enable = /开启|打开/.test(e.msg);
     await redis.set(`xhh:show_waves:${e.user_id}`, String(enable));
     if (enable && !isWavesTlEnabled()) {
-      e.reply('已记录，但锅巴里的「启用鸣潮体力」还没打开，总览暂时不会带鸣潮');
+      e.reply('已记录。鸣潮还没启用，请主人到锅巴打开「启用鸣潮体力」');
       return true;
     }
     e.reply(enable
-      ? '已开启鸣潮体力显示，体力总览将附带鸣潮（数据取自 gsuid_core 鸣潮插件的登录凭证）'
+      ? '已开启鸣潮体力显示，体力总览将附带鸣潮'
       : '已关闭鸣潮体力显示，体力总览将隐藏鸣潮');
     return true;
   }
@@ -924,7 +924,7 @@ export class TL extends plugin {
 
     hidden.add(uid);
     await setHiddenUids(qq, game, hidden);
-    const lines = [`已屏蔽 ${label} UID ${uid} 的体力显示（不影响绑定和体力推送）`];
+    const lines = [`已屏蔽 ${label} UID ${uid} 的体力显示`];
     if (bound.length) {
       const rest = bound.filter((u) => !hidden.has(u));
       lines.push(rest.length
@@ -1474,7 +1474,9 @@ export class TL extends plugin {
   }
 
   // 体力
-  async note(e, game = 'gs', san = true, targetQq = null, forceUid = null) {
+  // opts.allowDetail=false：自动路径（体力推送轮询）调用时传，跳过「要额外打接口的明细
+  // 补拉」（原神质变仪走 dailyNote）。明细只在用户主动查询时才值得发请求，见 finishNote。
+  async note(e, game = 'gs', san = true, targetQq = null, forceUid = null, opts = {}) {
     const qq = targetQq || e.user_id;
     let uid;
     if (forceUid) {
@@ -1526,7 +1528,7 @@ export class TL extends plugin {
           const res0 = await this.noteViaCookie(e, game, auth.ck, uid);
           if (res0 && res0.retcode === 0) {
             sk = auth.ck; // 供下方 getGameDate 复用（cookie 版 GameRoles 可用）
-            return await this.finishNote(e, game, res0, uid, getHeaders(e, sk, false));
+            return await this.finishNote(e, game, res0, uid, getHeaders(e, sk, false), opts);
           }
         }
       } catch (err) {
@@ -1536,7 +1538,7 @@ export class TL extends plugin {
 
     if (!sk) {
       if (!san)
-        e.reply('UID:' + uid + ' 未绑定米游社 SToken，请【#扫码登录】米游社~', quoteEnabled());
+        e.reply('UID:' + uid + ' 未绑定，请【#扫码登录】米游社~', quoteEnabled());
       return '没有';
     }
     // sk 可能是纯 cookie：无扫码 stoken 的用户走 getstoken 的 SQLite 兜底，
@@ -1577,15 +1579,18 @@ export class TL extends plugin {
       return '过期';
     }
 
-    return await this.finishNote(e, game, res, uid, headers);
+    return await this.finishNote(e, game, res, uid, headers, opts);
   }
 
   /**
    * note() 拿到有效 res（retcode 0）后的公共收尾：算恢复时间、补等级、
    * 判派遣完成、拉原神活动日历，归一成渲染层需要的 data。widget 与 cookie
    * 兜底两条路径共用，字段同名故无需分支。
+   * @param {object} [opts] { allowDetail } allowDetail=false 时跳过需要额外打接口的
+   *   明细补拉（质变仪）。自动路径（体力推送轮询）传 false：那类请求在后台按
+   *   cron 反复触发，命中风控就是纯粹的无效请求刷屏；用户主动查询才值得打一次。
    */
-  async finishNote(e, game, res, uid, headers) {
+  async finishNote(e, game, res, uid, headers, opts = {}) {
     if (!res || res.retcode !== 0) {
       logger.error(res);
       return false;
@@ -1665,8 +1670,9 @@ export class TL extends plugin {
             if (!view || typeof view !== 'object' || typeof view.text !== 'string') view = null;
           }
 
-          // 2) 冷却期内不重试
-          if (!view) {
+          // 2) 冷却期内不重试；自动路径（体力推送轮询）传了 allowDetail=false，
+          //    同样不补拉——上面命中缓存时照常展示，只是不再为它发新请求
+          if (!view && opts.allowDetail !== false) {
             let cooling = null;
             try { cooling = await redis.get(`xhh:transformer_cool:${stuid}`); } catch (_) {}
             if (!cooling) {
