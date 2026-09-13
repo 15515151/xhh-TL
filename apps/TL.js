@@ -1474,8 +1474,9 @@ export class TL extends plugin {
   }
 
   // 体力
-  // opts.allowDetail=false：自动路径（体力推送轮询）调用时传，跳过「要额外打接口的明细
-  // 补拉」（原神质变仪走 dailyNote）。明细只在用户主动查询时才值得发请求，见 finishNote。
+  // opts.allowDetail=false：自动路径（体力推送轮询）调用时传 —— 只拿体力值本身，
+  // 等级/活动日历/质变仪这些要额外打接口的明细全部跳过，等真要出图推送时再补
+  // （见 resinPush.pushOne）。用户主动查询不传，照常带全明细。
   async note(e, game = 'gs', san = true, targetQq = null, forceUid = null, opts = {}) {
     const qq = targetQq || e.user_id;
     let uid;
@@ -1586,9 +1587,10 @@ export class TL extends plugin {
    * note() 拿到有效 res（retcode 0）后的公共收尾：算恢复时间、补等级、
    * 判派遣完成、拉原神活动日历，归一成渲染层需要的 data。widget 与 cookie
    * 兜底两条路径共用，字段同名故无需分支。
-   * @param {object} [opts] { allowDetail } allowDetail=false 时跳过需要额外打接口的
-   *   明细补拉（质变仪）。自动路径（体力推送轮询）传 false：那类请求在后台按
-   *   cron 反复触发，命中风控就是纯粹的无效请求刷屏；用户主动查询才值得打一次。
+   * @param {object} [opts] { allowDetail } allowDetail=false 时只取体力值本身：等级昵称、
+   *   活动日历、质变仪这三个「要额外打接口」的明细全部跳过，并在结果上挂
+   *   `_detailSkipped` 标记，等真要出图推送时由调用方补一次。自动路径（体力推送轮询）
+   *   传 false —— 那类请求按 cron 每轮每个号都要打，明细留在轮询里纯属给风控送人头。
    */
   async finishNote(e, game, res, uid, headers, opts = {}) {
     if (!res || res.retcode !== 0) {
@@ -1600,7 +1602,10 @@ export class TL extends plugin {
       res.data.stamina_recover_time ||
       res.data.energy?.restore;
     if (!time) time = 0;
-    let game_ = await this.getGameDate(e, headers, uid);
+    // 等级/昵称要另打一次 GameRoles。自动路径（体力推送轮询）只用体力值判阈值，
+    // 这里跳过；真要出图推送时再由 pushOne 补一次带明细的查询。
+    let game_ =
+      opts.allowDetail === false ? {} : await this.getGameDate(e, headers, uid);
     // 派遣，委托 是否全部完成
     if (res.data.expeditions?.length) {
       res.data.expeditions_ = res.data.expeditions.every(
@@ -1630,8 +1635,18 @@ export class TL extends plugin {
       });
     }
 
+    // 自动路径（体力推送轮询）跳过明细的标记：pushOne 据此判断要不要补查完整数据。
+    // 同样用不可枚举属性，不进 JSON / 不被 {...data} 带走。
+    if (opts.allowDetail === false) {
+      Object.defineProperty(data, '_detailSkipped', {
+        value: true,
+        enumerable: false,
+      });
+    }
+
     // 原神活动日历：widget 接口不返回活动，用 cookie 额外拉 act_calendar（需完整 CK；失败静默不阻塞体力主流程）
-    if (game === 'gs' && config().tl_widget_activity !== false) {
+    // 自动路径（体力推送轮询）跳过：推送图上的活动条不差这一轮，省下的请求留给阈值命中那次补拉
+    if (game === 'gs' && config().tl_widget_activity !== false && opts.allowDetail !== false) {
       try {
         const mys = await prepareMysContext(e, 'gs');
         const api = await mys?.runtime?.getMysApi?.('all', { game: 'gs' });

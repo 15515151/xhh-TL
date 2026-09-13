@@ -708,6 +708,18 @@ export class resinPush extends plugin {
     const meta = GAME_META[game]
     const fakeE = this.makeFakeE(qq, sub.group)
 
+    // 轮询那一步只问了体力值本身（结果带 _detailSkipped 标记，见 TL.note），到真要出图
+    // 了才补一次带明细的查询：等级昵称、活动日历、质变仪这几个额外接口只在推送时打一次。
+    // 补不到就用手上的基础数据出图，别让整条推送栽在这一步。
+    if (item?._detailSkipped && game !== 'ww') {
+      try {
+        const full = await tl.note(fakeE, game, true, null, forceUid)
+        if (full && typeof full === 'object') item = full
+      } catch (err) {
+        logger?.debug?.(`[xhh-TL][体力推送] 补明细失败 ${qq}: ${err?.message}`)
+      }
+    }
+
     // 群昵称
     let qqname = String(qq)
     try {
