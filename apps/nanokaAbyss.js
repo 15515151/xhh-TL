@@ -17,12 +17,11 @@
 import fetch from 'node-fetch'
 import moment from 'moment'
 import path from 'path'
-import fs from 'fs'
 import sharp from 'sharp'
 import plugin from '../../../lib/plugins/plugin.js'
-import { getRenderScaleStyle, config as cfg, pluginDir } from '../utils/pluginConfig.js'
+import { config as cfg, pluginDir } from '../utils/pluginConfig.js'
 import { replyProgress, replyQuote, quoteEnabled } from '../utils/replyHelper.js'
-import { toWebp } from '../utils/renderImage.js'
+import { renderTpl } from '../utils/render.js'
 
 const MANIFEST_URL = 'https://static.nanoka.cc/manifest.json'
 const STATIC = 'https://static.nanoka.cc'
@@ -2406,47 +2405,16 @@ export class nanokaAbyss extends plugin {
 
   async renderToBuffer(e, data, saveId, opts = {}) {
     const tpl = opts.tpl || 'nanoka_abyss'
-    const renderConfig = cfg()
-    const renderScale = getRenderScaleStyle(renderConfig, opts.baseScale ?? 1.6)
-    const renderResult = await e.runtime.render('xhh-TL', tpl, data, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender({ data: d }) {
-        return {
-          ...d,
-          imgType: 'png',
-          sys: {
-            scale: renderScale,
-          },
-          ppath: '../../../../plugins/xhh-TL/resources/',
-          tplFile: path.join(pluginDir, `resources/${tpl}/${tpl}.html`),
-          saveId,
-        }
-      },
+    // reply:false → 拿 webp buffer，回复逻辑仍走本类 sendImage（含 jpeg 兜底）
+    return renderTpl(e, {
+      tpl,
+      tplFile: path.join(pluginDir, `resources/${tpl}/${tpl}.html`),
+      data,
+      baseScale: opts.baseScale ?? 1.6,
+      rem: true,
+      saveId,
+      reply: false,
     })
-
-    let buf = null
-    if (Buffer.isBuffer(renderResult)) {
-      buf = renderResult
-    } else if (typeof renderResult === 'string') {
-      const s = renderResult.replace(/^base64:\/\//, '').replace(/^data:image\/\w+;base64,/, '')
-      buf = Buffer.from(s, 'base64')
-    } else if (renderResult?.file) {
-      const f = renderResult.file
-      if (Buffer.isBuffer(f)) buf = f
-      else if (typeof f === 'string' && f.startsWith('base64://')) {
-        buf = Buffer.from(f.slice(9), 'base64')
-      } else if (typeof f === 'string' && f.startsWith('data:image')) {
-        buf = Buffer.from(f.split(',')[1], 'base64')
-      } else if (typeof f === 'string') {
-        const fp = f.replace(/^file:\/\//, '')
-        if (fs.existsSync(fp)) buf = fs.readFileSync(fp)
-      }
-    }
-    if (!buf) return null
-
-    // 与其余出图点统一：png 只是渲染器的中间产物，发出去的是 webp（体积约为 png 的 1/5）
-    return await toWebp(buf)
   }
 
   async sendImage(e, buf) {

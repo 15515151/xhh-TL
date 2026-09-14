@@ -12,9 +12,9 @@ import YAML from 'yaml'
 import lodash from 'lodash'
 import { Character, MysApi, Player, HardChallenge } from '../../miao-plugin/models/index.js'
 import { prepareMysContext } from '../utils/runtimePatch.js'
-import { getRenderScaleStyle, config, pluginDir } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote } from '../utils/replyHelper.js'
+import { config, pluginDir } from '../utils/pluginConfig.js'
+import { replyProgress } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import { resolveTargetQq, resolveDisplayName, faceUrl, pickGsBgImage } from '../utils/gsHelper.js'
 
 function getVal(obj, pathStr) {
@@ -819,12 +819,10 @@ export class gsAllAbyss extends plugin {
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = await resolveDisplayName(e, qq)
     const bgImage = pickGsBgImage('xhh-TL/gsAllAbyss')
-    const renderScale = getRenderScaleStyle(config(), 2.0)
     // 毛玻璃主题：light=初版浅色玻璃 / dark=深色半透明（锅巴可配）
     const themeRaw = String(config().gs_all_abyss_theme || 'light').toLowerCase()
     const theme = themeRaw === 'dark' ? 'dark' : 'light'
     const tplFile = pluginDir + '/resources/gs_all_abyss/gs_all_abyss.html'
-    const ppath = '../../../../plugins/xhh-TL/resources/'
 
     const renderData = {
       periodText,
@@ -840,27 +838,12 @@ export class gsAllAbyss extends plugin {
       sections: buildGsSections({ abyss, hard, role }),
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'gs_all_abyss', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'gs_all_abyss',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return replyQuote(e, segment.image(image))
-    } catch (err) {
-      logger.error('[xhh][gsAllAbyss] 渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'gs_all_abyss',
+      tplFile,
+      data: renderData,
+      baseScale: 2.0,
+      rem: true,
+    })
   }
 }

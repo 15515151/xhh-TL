@@ -7,9 +7,9 @@ import plugin from '../../../lib/plugins/plugin.js';
 import { createUser } from '../utils/userBind.js';
 import { getstoken, cookiePart, stokenToCookie } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
-import { getRenderScaleStyle, config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js';
+import { config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
 import { replyQuote, replyForward, quoteEnabled } from '../utils/replyHelper.js';
+import { renderTpl } from '../utils/render.js';
 import { prepareMysContext, resolveAuth } from '../utils/runtimePatch.js';
 import LiteMysApi from '../utils/mysClient.js';
 import { getWavesStaminaList, isWavesTlEnabled, listWavesAccounts } from '../utils/wavesData.js';
@@ -589,28 +589,24 @@ export class TL extends plugin {
   }
 
   /** 经典 Tl.html 渲染一张图 → Buffer */
-  async renderTlImage(e, data, renderScale) {
-    const ppath = '../../../../../plugins/xhh-TL/resources/';
-    const tplFile = pluginDir + '/resources/Tl/Tl.html';
-    const renderResult = await e.runtime.render('小火花', 'Tl/Tl', data, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender() {
-        return {
-          imgType: 'png',
-          sys: { scale: renderScale },
-          ...data,
-          ppath,
-          tplFile,
-          saveId: 'Tl',
-        };
-      },
+  async renderTlImage(e, data) {
+    // 两段路径 Tl/Tl → 产物比单段深一层，ppath 手动给 5 层 ../；
+    // 且资源实体在 xhh-TL 下，render 插件名却是「小火花」，故 plugin 与 ppath 分开传
+    return renderTpl(e, {
+      tpl: 'Tl/Tl',
+      plugin: '小火花',
+      tplFile: pluginDir + '/resources/Tl/Tl.html',
+      ppath: '../../../../../plugins/xhh-TL/resources/',
+      data,
+      baseScale: 2.0,
+      rem: true,
+      saveId: 'Tl',
+      reply: false,
     });
-    return await toWebp(extractRenderBuffer(renderResult));
   }
 
   /** 按游戏列表出多张图（每张图可含 1 个或多个 UID） */
-  async renderTlSegmentsByGames(e, allGameData, displayQq, displayName, renderScale, perGameChunkSize = 0) {
+  async renderTlSegmentsByGames(e, allGameData, displayQq, displayName, perGameChunkSize = 0) {
     const keyMap = { gs: 'gs_list', sr: 'sr_list', zzz: 'zzz_list', ww: 'ww_list' };
     const segments = [];
     const timeStr = `${moment().format('MM-DD HH:mm')} ${this.week[moment().day()]}`;
@@ -626,7 +622,7 @@ export class TL extends plugin {
         };
         chunkData[keyMap[game]] = chunk;
         await this.hideUidIfNeeded(chunkData, displayQq);
-        const image = await this.renderTlImage(e, chunkData, renderScale);
+        const image = await this.renderTlImage(e, chunkData);
         if (image) segments.push(segment.image(image));
       }
     }
@@ -655,7 +651,6 @@ export class TL extends plugin {
       showGs = true, showSr = true, showZzz = true, showWaves = false, targetQq,
     } = opts;
     const cfg = config();
-    const renderScale = getRenderScaleStyle(cfg, 2.0);
     const keyMap = { gs: 'gs_list', sr: 'sr_list', zzz: 'zzz_list', ww: 'ww_list' };
     const cardsPerMsg = cfg.tl_cards_per_msg || 3;
     // 总览时按被查者的各游戏开关过滤（单独查询不受影响）
@@ -690,7 +685,7 @@ export class TL extends plugin {
       // 独立模式：按 uids_per_image 分组
       if (tlRenderMode === 'single') {
         const segs = await this.renderTlSegmentsByGames(
-          e, allGameData, displayQq, displayName, renderScale, uidsPerImage,
+          e, allGameData, displayQq, displayName, uidsPerImage,
         );
         return this.replyTlSegments(e, segs, cardsPerMsg);
       }
@@ -701,7 +696,7 @@ export class TL extends plugin {
         const needSplit = Object.values(allGameData).some(list => list.length > mergeUidsPerImage);
         if (needSplit) {
           const segs = await this.renderTlSegmentsByGames(
-            e, allGameData, displayQq, displayName, renderScale, mergeUidsPerImage,
+            e, allGameData, displayQq, displayName, mergeUidsPerImage,
           );
           // 原逻辑：1 张引用，多张一律转发（不走 cardsPerMsg 引用）
           if (segs.length === 1) return replyQuote(e, segs[0]);
@@ -722,14 +717,14 @@ export class TL extends plugin {
           combinedData[keyMap[game]] = dataList;
         }
         await this.hideUidIfNeeded(combinedData, displayQq);
-        const image = await this.renderTlImage(e, combinedData, renderScale);
+        const image = await this.renderTlImage(e, combinedData);
         if (image) return replyQuote(e, segment.image(image));
         return replyQuote(e, '图片渲染失败，请稍后重试');
       }
 
       // 有游戏多 UID → 每游戏一张，多图转发
       const segs = await this.renderTlSegmentsByGames(
-        e, allGameData, displayQq, displayName, renderScale, 0,
+        e, allGameData, displayQq, displayName, 0,
       );
       if (segs.length > 1) {
         const forwardMsg = await common.makeForwardMsg(e, segs);
@@ -745,7 +740,7 @@ export class TL extends plugin {
     if (_data_.zzz_data) listData.zzz_list = [_data_.zzz_data];
     if (_data_.ww_data) listData.ww_list = [_data_.ww_data];
     await this.hideUidIfNeeded(listData, displayQq);
-    const image = await this.renderTlImage(e, listData, renderScale);
+    const image = await this.renderTlImage(e, listData);
     if (image) return replyQuote(e, segment.image(image));
     return replyQuote(e, '图片渲染失败，请稍后重试');
   }
@@ -1000,8 +995,7 @@ export class TL extends plugin {
     const multi = cfg.show_all_bindings;
     // 卡片样式：widget=桌面小组件竖卡，其余=立绘横卡
     const isWidget = cfg.tl_card_style === 'widget';
-    // 立绘卡 body 900px（横版宽卡）基准 1.0；小组件卡 620px（竖版）用 1.4 提清晰度
-    const portraitScale = getRenderScaleStyle(cfg, isWidget ? 1.4 : 1.0);
+    // 缩放基准由各叶子方法自带（立绘卡 1.0 / 小组件卡 1.4），此处不再层层透传
     const qq = targetQq || e.user_id;
 
     // 收集每个游戏的数据列表
@@ -1028,8 +1022,8 @@ export class TL extends plugin {
       if (!list) continue;
       for (const item of list) {
         const seg = isWidget
-          ? await this.renderWidgetCard(e, game, item, displayInfo, portraitScale)
-          : await this.renderPortraitCard(e, game, item, displayInfo, portraitScale);
+          ? await this.renderWidgetCard(e, game, item, displayInfo)
+          : await this.renderPortraitCard(e, game, item, displayInfo);
         if (seg) segments.push(seg);
       }
     }
@@ -1392,33 +1386,27 @@ export class TL extends plugin {
   }
 
   // 单个 gs/sr/zzz UID → 一张立绘卡 segment
-  async renderPortraitCard(e, game, item, displayInfo, renderScale) {
+  async renderPortraitCard(e, game, item, displayInfo) {
     const d = await this.buildStaminaData(game, item, displayInfo);
-
-    const ppath = '../../../../../plugins/xhh-TL/resources/';
-    const tplFile = pluginDir + '/resources/Tl/Portrait.html';
     const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
 
-    const renderResult = await e.runtime.render('小火花', 'Tl/Portrait', renderData, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender({ data }) {
-        return {
-          imgType: 'png',
-          sys: { scale: renderScale },
-          ...renderData,
-          ppath,
-          tplFile,
-          saveId: `Portrait_${game}`,
-        };
-      },
+    // 立绘横卡 900px 基准 1.0；两段路径 → ppath 手动给 5 层，插件名「小火花」
+    const image = await renderTpl(e, {
+      tpl: 'Tl/Portrait',
+      plugin: '小火花',
+      tplFile: pluginDir + '/resources/Tl/Portrait.html',
+      ppath: '../../../../../plugins/xhh-TL/resources/',
+      data: renderData,
+      baseScale: 1.0,
+      rem: true,
+      saveId: `Portrait_${game}`,
+      reply: false,
     });
-    const image = await toWebp(extractRenderBuffer(renderResult));
     return image ? segment.image(image) : null;
   }
 
   // 单个 gs/sr/zzz UID → 一张桌面小组件卡 segment
-  async renderWidgetCard(e, game, item, displayInfo, renderScale) {
+  async renderWidgetCard(e, game, item, displayInfo) {
     const d = await this.buildStaminaData(game, item, displayInfo);
 
     // 小组件竖卡：仅取 bars[0] 作主资源大数字（中间列表框已按需求移除）
@@ -1438,25 +1426,20 @@ export class TL extends plugin {
       d.acts = (d.acts || []).slice(0, limit);
     }
 
-    const ppath = '../../../../../plugins/xhh-TL/resources/';
-    const tplFile = pluginDir + '/resources/Tl/Widget.html';
     const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
 
-    const renderResult = await e.runtime.render('小火花', 'Tl/Widget', renderData, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender({ data }) {
-        return {
-          imgType: 'png',
-          sys: { scale: renderScale },
-          ...renderData,
-          ppath,
-          tplFile,
-          saveId: `Widget_${game}`,
-        };
-      },
+    // 小组件竖卡 620px 基准 1.4 提清晰度；两段路径 → ppath 手动给 5 层，插件名「小火花」
+    const image = await renderTpl(e, {
+      tpl: 'Tl/Widget',
+      plugin: '小火花',
+      tplFile: pluginDir + '/resources/Tl/Widget.html',
+      ppath: '../../../../../plugins/xhh-TL/resources/',
+      data: renderData,
+      baseScale: 1.4,
+      rem: true,
+      saveId: `Widget_${game}`,
+      reply: false,
     });
-    const image = await toWebp(extractRenderBuffer(renderResult));
     return image ? segment.image(image) : null;
   }
 

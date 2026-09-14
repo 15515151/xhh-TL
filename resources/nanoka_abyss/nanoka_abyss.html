@@ -13,7 +13,7 @@
 }
 
 html, body {
-  width: 860px;
+  width: 860rem;
   margin: 0;
   padding: 0;
   background: #07090f;
@@ -27,37 +27,37 @@ body {
 
 .nk-page {
   position: relative;
-  width: 860px;
+  width: 860rem;
   box-sizing: border-box;
-  min-height: 520px;
-  padding: 28px 32px 22px;
+  min-height: 520rem;
+  padding: 28rem 32rem 22rem;
   overflow: hidden; /* 装饰光晕裁在卡片内；正文宽度已固定 860，不会再裁字 */
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(88, 166, 255, 0.16), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, rgba(123, 97, 255, 0.14), transparent 50%),
+    radial-gradient(1200rem 600rem at 10% -10%, rgba(88, 166, 255, 0.16), transparent 55%),
+    radial-gradient(900rem 500rem at 100% 0%, rgba(123, 97, 255, 0.14), transparent 50%),
     linear-gradient(165deg, #0b0f18 0%, #0a0d14 45%, #080a10 100%);
 }
 
 .nk-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
+  filter: blur(70rem);
   pointer-events: none;
   opacity: 0.45;
 }
-.nk-glow.a { width: 280px; height: 280px; background: #3d7eff; top: -80px; right: -40px; }
-.nk-glow.b { width: 240px; height: 240px; background: #7b61ff; bottom: 40px; left: -60px; }
+.nk-glow.a { width: 280rem; height: 280rem; background: #3d7eff; top: -80rem; right: -40rem; }
+.nk-glow.b { width: 240rem; height: 240rem; background: #7b61ff; bottom: 40rem; left: -60rem; }
 
 .nk-head {
   position: relative;
   z-index: 1;
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 16rem;
   align-items: flex-start;
-  margin-bottom: 22px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 22rem;
+  padding-bottom: 18rem;
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.08);
 }
 
 .nk-brand {
@@ -66,16 +66,16 @@ body {
 }
 
 .nk-kicker {
-  font-size: 11px;
+  font-size: 11rem;
   letter-spacing: 0.22em;
   font-weight: 700;
   color: #7eb6ff;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 8rem;
 }
 
 .nk-title {
-  font-size: 28px;
+  font-size: 28rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #fff;
@@ -83,15 +83,15 @@ body {
 }
 
 .nk-sub {
-  margin-top: 8px;
-  font-size: 13px;
+  margin-top: 8rem;
+  font-size: 13rem;
   color: #8b93a7;
 }
 
 .nk-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8rem;
   justify-content: flex-end;
   flex-shrink: 0;
   max-width: 42%;
@@ -100,14 +100,14 @@ body {
 .nk-chip {
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 12px;
+  height: 28rem;
+  padding: 0 12rem;
+  border-radius: 999rem;
+  font-size: 12rem;
   font-weight: 600;
   color: #dce8ff;
   background: rgba(88, 166, 255, 0.16);
-  border: 1px solid rgba(88, 166, 255, 0.28);
+  border: 1rem solid rgba(88, 166, 255, 0.28);
 }
 .nk-chip.soft {
   color: #c9c4ff;
@@ -124,24 +124,24 @@ body {
   position: relative;
   z-index: 1;
   background: rgba(14, 18, 28, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 16px 18px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
+  border-radius: 16rem;
+  padding: 16rem 18rem;
+  backdrop-filter: blur(12rem);
+  -webkit-backdrop-filter: blur(12rem);
+  box-shadow: 0 10rem 30rem rgba(0, 0, 0, 0.25);
 }
 
-.nk-buff { margin-bottom: 16px; }
+.nk-buff { margin-bottom: 16rem; }
 .nk-buff h2 {
-  font-size: 20px;
+  font-size: 20rem;
   font-weight: 700;
   color: #fff;
-  margin: 6px 0 8px;
+  margin: 6rem 0 8rem;
 }
 
 .nk-sec-label, .nk-sec-head span {
-  font-size: 11px;
+  font-size: 11rem;
   letter-spacing: 0.18em;
   font-weight: 700;
   color: #6ea8ff;
@@ -149,84 +149,84 @@ body {
 }
 
 .nk-desc {
-  font-size: 13px;
+  font-size: 13rem;
   line-height: 1.55;
   color: #b7bfcf;
   white-space: pre-wrap;
 }
 
-.nk-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.nk-tags { display: flex; flex-wrap: wrap; gap: 8rem; margin-top: 12rem; }
 .nk-tag {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  font-size: 12rem;
+  padding: 4rem 10rem;
+  border-radius: 999rem;
   color: #e7ecff;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
 }
 
 .nk-note {
   position: relative;
   z-index: 1;
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 12px;
+  margin-bottom: 14rem;
+  padding: 10rem 14rem;
+  border-radius: 10rem;
+  font-size: 12rem;
   color: #e0c48a;
   background: rgba(210, 153, 34, 0.1);
-  border: 1px solid rgba(210, 153, 34, 0.22);
+  border: 1rem solid rgba(210, 153, 34, 0.22);
 }
 
-.nk-section { position: relative; z-index: 1; margin-top: 8px; margin-bottom: 8px; }
+.nk-section { position: relative; z-index: 1; margin-top: 8rem; margin-bottom: 8rem; }
 .nk-sec-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  margin: 14px 0 12px;
+  gap: 12rem;
+  margin: 14rem 0 12rem;
 }
-.nk-sec-head h2 { font-size: 18px; color: #fff; font-weight: 700; }
+.nk-sec-head h2 { font-size: 18rem; color: #fff; font-weight: 700; }
 
 .nk-stage-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 12rem;
 }
-.stage h3 { font-size: 15px; color: #fff; margin: 6px 0 8px; }
+.stage h3 { font-size: 15rem; color: #fff; margin: 6rem 0 8rem; }
 .stage-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 4rem;
 }
-.stage-top b { color: #8eb7ff; font-size: 12px; letter-spacing: 0.06em; }
-.stage-top em { font-style: normal; color: #8b93a7; font-size: 12px; }
+.stage-top b { color: #8eb7ff; font-size: 12rem; letter-spacing: 0.06em; }
+.stage-top em { font-style: normal; color: #8b93a7; font-size: 12rem; }
 
 /* 剧诗：头像在标题下方（名称下面），再接描述 */
 .stage-boss {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 0 0 10px;
+  gap: 10rem;
+  margin: 0 0 10rem;
 }
 .stage-boss .boss {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-width: 72px;
-  max-width: 110px;
+  gap: 6rem;
+  min-width: 72rem;
+  max-width: 110rem;
 }
 .stage-boss .boss img,
 .stage-boss .boss .mon-ph {
-  width: 56px;
-  height: 56px;
+  width: 56rem;
+  height: 56rem;
   border-radius: 50%;
   object-fit: cover;
   background: linear-gradient(145deg, #1c2436, #121722);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1rem solid rgba(255, 255, 255, 0.12);
 }
 .stage-boss .boss span {
-  font-size: 11px;
+  font-size: 11rem;
   color: #dce3f2;
   text-align: center;
   line-height: 1.25;
@@ -237,33 +237,33 @@ body {
 .ley-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 14rem;
   align-items: start;
 }
 .ley-col {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 10rem;
   min-width: 0;
 }
 .ley-col-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 10rem 12rem;
+  border-radius: 12rem;
   background: rgba(88, 166, 255, 0.1);
-  border: 1px solid rgba(88, 166, 255, 0.22);
+  border: 1rem solid rgba(88, 166, 255, 0.22);
 }
 .ley-col-head h3 {
-  font-size: 16px;
+  font-size: 16rem;
   color: #fff;
   font-weight: 700;
   margin: 0;
 }
 .ley-col-head em {
   font-style: normal;
-  font-size: 12px;
+  font-size: 12rem;
   color: #8eb7ff;
   font-weight: 600;
 }
@@ -277,37 +277,37 @@ body {
 }
 .ley-col.dire .ley-col-head em { color: #ff9a7a; }
 .ley-boss {
-  border-radius: 14px;
-  padding: 12px 12px 10px;
+  border-radius: 14rem;
+  padding: 12rem 12rem 10rem;
   background: rgba(14, 18, 28, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
 }
 .ley-boss-top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 10rem;
+  margin-bottom: 8rem;
 }
 .ley-boss-top img,
 .ley-boss-top .mon-ph {
-  width: 52px;
-  height: 52px;
+  width: 52rem;
+  height: 52rem;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
   background: linear-gradient(145deg, #1c2436, #121722);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1rem solid rgba(255, 255, 255, 0.12);
 }
 .ley-boss-meta { min-width: 0; flex: 1; }
 .ley-boss-meta b {
   display: block;
-  font-size: 11px;
+  font-size: 11rem;
   color: #8eb7ff;
   letter-spacing: 0.04em;
-  margin-bottom: 3px;
+  margin-bottom: 3rem;
 }
 .ley-boss-meta h4 {
-  font-size: 14px;
+  font-size: 14rem;
   color: #fff;
   font-weight: 700;
   line-height: 1.3;
@@ -315,121 +315,121 @@ body {
   word-break: break-all;
 }
 .ley-boss .nk-desc {
-  font-size: 12px;
+  font-size: 12rem;
   line-height: 1.5;
   color: #b7bfcf;
   white-space: pre-wrap;
 }
 
-.nk-floor-list { display: flex; flex-direction: column; gap: 12px; }
+.nk-floor-list { display: flex; flex-direction: column; gap: 12rem; }
 .floor-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 8rem;
 }
-.floor-head h3 { font-size: 16px; color: #fff; font-weight: 700; }
+.floor-head h3 { font-size: 16rem; color: #fff; font-weight: 700; }
 
 .buff-list {
   list-style: none;
-  margin: 0 0 10px;
+  margin: 0 0 10rem;
   padding: 0;
 }
 .buff-list li {
-  font-size: 12px;
+  font-size: 12rem;
   color: #c5cce0;
-  padding: 6px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  padding: 6rem 0;
+  border-bottom: 1rem dashed rgba(255, 255, 255, 0.06);
 }
 .buff-list li:last-child { border-bottom: 0; }
 
-.room-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
+.room-grid { display: grid; grid-template-columns: 1fr; gap: 10rem; margin-top: 8rem; }
 .room {
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 12rem;
+  padding: 10rem 12rem;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1rem solid rgba(255, 255, 255, 0.05);
 }
-.room-title { font-size: 12px; color: #8eb7ff; margin-bottom: 8px; font-weight: 600; }
+.room-title { font-size: 12rem; color: #8eb7ff; margin-bottom: 8rem; font-weight: 600; }
 
-.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10rem; margin-top: 8rem; }
 .hsr-sides.with-star { grid-template-columns: 1fr 1fr 1fr; }
 .star-side .side-lab { color: #ffd089; }
 .side-lab {
-  font-size: 11px;
+  font-size: 11rem;
   color: #8b93a7;
-  margin-bottom: 6px;
+  margin-bottom: 6rem;
   letter-spacing: 0.08em;
 }
 
-.mon-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mon-row { display: flex; flex-wrap: wrap; gap: 8rem; }
 .mon {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8rem;
   min-width: 0;
   max-width: 100%;
-  padding: 6px 10px 6px 6px;
-  border-radius: 999px;
+  padding: 6rem 10rem 6rem 6rem;
+  border-radius: 999rem;
   background: rgba(0, 0, 0, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1rem solid rgba(255, 255, 255, 0.06);
 }
 .mon img {
-  width: 40px;
-  height: 40px;
+  width: 40rem;
+  height: 40rem;
   border-radius: 50%;
   object-fit: cover;
   background: linear-gradient(145deg, #1c2436, #121722);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1rem solid rgba(255, 255, 255, 0.12);
   flex-shrink: 0;
 }
 .mon-ph {
-  width: 40px;
-  height: 40px;
+  width: 40rem;
+  height: 40rem;
   border-radius: 50%;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 11rem;
   font-weight: 700;
   color: #9aa6c0;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
 }
 .mon span {
-  font-size: 12px;
+  font-size: 12rem;
   color: #e8eaf0;
   font-weight: 500;
   line-height: 1.25;
   word-break: break-all;
 }
-.mon em { font-style: normal; font-size: 10px; color: #8b93a7; }
+.mon em { font-style: normal; font-size: 10rem; color: #8b93a7; }
 .mon .hp {
   display: block;
-  font-size: 10px;
+  font-size: 10rem;
   color: #ff9a7a;
   font-weight: 600;
-  margin-top: 1px;
+  margin-top: 1rem;
 }
 
 .weak-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin: 8px 0;
+  gap: 6rem;
+  margin: 8rem 0;
 }
-.weak-lab { font-size: 11px; color: #8b93a7; margin-left: 4px; }
+.weak-lab { font-size: 11rem; color: #8b93a7; margin-left: 4rem; }
 .elem {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 11px;
+  min-width: 36rem;
+  height: 22rem;
+  padding: 0 8rem;
+  border-radius: 6rem;
+  font-size: 11rem;
   font-weight: 700;
   font-style: normal;
 }
@@ -447,33 +447,34 @@ body {
 .chal {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 6rem;
+  margin-top: 10rem;
 }
 .chal span {
-  font-size: 11px;
+  font-size: 11rem;
   color: #aeb6c8;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 4rem 8rem;
+  border-radius: 6rem;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1rem solid rgba(255, 255, 255, 0.05);
 }
 
 .nk-foot {
   position: relative;
   z-index: 1;
-  margin-top: 22px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 22rem;
+  padding-top: 14rem;
+  border-top: 1rem solid rgba(255, 255, 255, 0.08);
   text-align: center;
-  font-size: 11px;
+  font-size: 11rem;
   color: #5c6478;
   letter-spacing: 0.04em;
 }
 
   </style>
+  <style id="rem-root">html { font-size: {{scalePx}}px; }</style>
 </head>
-<body {{sys.scale}}>
+<body>
   <div class="nk-page" id="container">
     <div class="nk-glow a"></div>
     <div class="nk-glow b"></div>

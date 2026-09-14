@@ -12,7 +12,7 @@
 }
 
 html, body {
-  width: 900px;
+  width: 900rem;
   margin: 0;
   padding: 0;
   background: #07090f;
@@ -26,10 +26,10 @@ body {
 
 .bc-page {
   position: relative;
-  width: 900px;
+  width: 900rem;
   box-sizing: border-box;
-  min-height: 300px;
-  padding: 26px 28px 20px;
+  min-height: 300rem;
+  padding: 26rem 28rem 20rem;
   overflow: hidden;
   background-color: #0b0f18;
   background-image:
@@ -43,12 +43,12 @@ body {
 .bc-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
+  filter: blur(70rem);
   pointer-events: none;
   opacity: 0.4;
 }
-.bc-glow.a { width: 280px; height: 280px; background: #ffb347; top: -80px; right: -40px; }
-.bc-glow.b { width: 220px; height: 220px; background: #ff7b5a; bottom: 40px; left: -60px; }
+.bc-glow.a { width: 280rem; height: 280rem; background: #ffb347; top: -80rem; right: -40rem; }
+.bc-glow.b { width: 220rem; height: 220rem; background: #ff7b5a; bottom: 40rem; left: -60rem; }
 
 /* ============ 顶部横幅 ============ */
 .bc-head {
@@ -57,50 +57,50 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  padding: 18px 22px;
-  border-radius: 18px;
+  gap: 16rem;
+  margin-bottom: 20rem;
+  padding: 18rem 22rem;
+  border-radius: 18rem;
   background: rgba(18, 24, 38, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10rem 30rem rgba(0, 0, 0, 0.25);
 }
-.bc-head-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.bc-head-left { display: flex; align-items: center; gap: 16rem; min-width: 0; }
 .bc-head-icon {
-  width: 56px; height: 56px; flex-shrink: 0;
+  width: 56rem; height: 56rem; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 14px;
+  border-radius: 14rem;
   background: rgba(255, 179, 71, 0.14);
-  border: 1px solid rgba(255, 179, 71, 0.26);
+  border: 1rem solid rgba(255, 179, 71, 0.26);
 }
-.bc-head-icon img { width: 38px; height: 38px; object-fit: contain; }
-.bc-head-emoji { font-size: 30px; }
+.bc-head-icon img { width: 38rem; height: 38rem; object-fit: contain; }
+.bc-head-emoji { font-size: 30rem; }
 .bc-head-text { min-width: 0; }
 .bc-title {
-  font-size: 28px; font-weight: 800; color: #fff;
+  font-size: 28rem; font-weight: 800; color: #fff;
   letter-spacing: -0.01em; line-height: 1.15;
 }
 .bc-sub {
-  margin-top: 6px;
-  font-size: 14px; color: #9aa6c0;
+  margin-top: 6rem;
+  font-size: 14rem; color: #9aa6c0;
 }
-.bc-sub .gain { color: #ffc46b; font-weight: 800; font-size: 16px; }
+.bc-sub .gain { color: #ffc46b; font-weight: 800; font-size: 16rem; }
 .bc-sub .warn { color: #ff8f6b; font-weight: 700; }
 /* 一件事都没做时的说明（今日已拿满 / 全部失败），避免三行全 0 被当成故障 */
 .bc-note {
-  margin-top: 6px;
-  font-size: 13px; color: #cbd5e8;
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 10px; border-radius: 999px;
+  margin-top: 6rem;
+  font-size: 13rem; color: #cbd5e8;
+  display: inline-flex; align-items: center; gap: 5rem;
+  padding: 3rem 10rem; border-radius: 999rem;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1rem solid rgba(255, 255, 255, 0.16);
 }
 .bc-avatars { display: flex; align-items: center; flex-shrink: 0; }
 .bc-avatars .av {
-  width: 44px; height: 44px; border-radius: 50%;
-  object-fit: cover; margin-left: -10px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  width: 44rem; height: 44rem; border-radius: 50%;
+  object-fit: cover; margin-left: -10rem;
+  border: 2rem solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2rem 8rem rgba(0, 0, 0, 0.35);
 }
 .bc-avatars .av:first-child { margin-left: 0; }
 
@@ -108,55 +108,55 @@ body {
 .bc-card {
   position: relative;
   z-index: 1;
-  padding: 16px 18px 8px;
-  border-radius: 18px;
+  padding: 16rem 18rem 8rem;
+  border-radius: 18rem;
   background: rgba(14, 18, 28, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10rem 30rem rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12rem);
+  -webkit-backdrop-filter: blur(12rem);
 }
 .bc-card-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 8rem;
 }
 .bc-card-title {
-  font-size: 18px; font-weight: 700; color: #fff;
-  display: flex; align-items: center; gap: 8px;
+  font-size: 18rem; font-weight: 700; color: #fff;
+  display: flex; align-items: center; gap: 8rem;
 }
-.bc-card-meta { font-size: 13px; color: #7a8499; }
+.bc-card-meta { font-size: 13rem; color: #7a8499; }
 
 /* ============ 表格 ============ */
 .bc-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 15rem;
 }
 .bc-table th {
-  padding: 12px 8px;
-  font-size: 13px; font-weight: 600; color: #8b93a7;
+  padding: 12rem 8rem;
+  font-size: 13rem; font-weight: 600; color: #8b93a7;
   text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.1);
 }
 .bc-table td {
-  padding: 16px 8px;
+  padding: 16rem 8rem;
   text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.05);
   vertical-align: middle;
 }
 .bc-table tbody tr:last-child td { border-bottom: none; }
 
-.c-idx { width: 48px; color: #7a8499; font-weight: 600; font-size: 14px; }
+.c-idx { width: 48rem; color: #7a8499; font-weight: 600; font-size: 14rem; }
 /* 固定列宽 + flex 靠左，图标起点不随版块名字数浮动 */
-.bc-table td.c-game { width: 260px; text-align: left; padding-left: 16px; }
-.c-game .g-cell { display: flex; align-items: center; gap: 12px; }
+.bc-table td.c-game { width: 260rem; text-align: left; padding-left: 16rem; }
+.c-game .g-cell { display: flex; align-items: center; gap: 12rem; }
 .c-game .g-cell img {
-  width: 40px; height: 40px; flex-shrink: 0;
-  object-fit: cover; border-radius: 10px;
+  width: 40rem; height: 40rem; flex-shrink: 0;
+  object-fit: cover; border-radius: 10rem;
   background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1rem rgba(255, 255, 255, 0.08);
 }
-.c-game .g-name { font-weight: 700; color: #f2f5ff; font-size: 16px; }
+.c-game .g-name { font-weight: 700; color: #f2f5ff; font-size: 16rem; }
 
 .n-signed { color: #4ad2a0; font-weight: 800; }
 .n-read { color: #6ba8ff; font-weight: 700; }
@@ -168,14 +168,15 @@ body {
 .bc-foot {
   position: relative;
   z-index: 1;
-  margin-top: 16px;
+  margin-top: 16rem;
   text-align: center;
-  font-size: 12px; color: #5c6478;
+  font-size: 12rem; color: #5c6478;
   letter-spacing: 0.04em;
 }
   </style>
+  <style id="rem-root">html { font-size: {{scalePx}}px; }</style>
 </head>
-<body {{sys.scale}}>
+<body>
   <div class="bc-page" id="container" {{if bgImage}}style="--bc-bg:url('{{bgImage}}')"{{/if}}>
     <div class="bc-glow a"></div>
     <div class="bc-glow b"></div>
@@ -212,7 +213,7 @@ body {
         <thead>
           <tr>
             <th class="c-idx">#</th>
-            <th class="c-game" style="text-align:left;padding-left:16px;">版块</th>
+            <th class="c-game" style="text-align:left;padding-left:16rem;">版块</th>
             <th>签到</th>
             <th>浏览</th>
             <th>点赞</th>

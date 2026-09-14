@@ -5,9 +5,9 @@ import YAML from 'yaml';
 import { Character, MysApi, Player } from '../../miao-plugin/models/index.js';
 import { createUser } from '../utils/userBind.js';
 import { prepareMysContext } from '../utils/runtimePatch.js';
-import { getRenderScaleStyle, pickRoleCombatBgImage, config, pluginDir, toFileUrl } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote } from '../utils/replyHelper.js'
+import { pickRoleCombatBgImage, pluginDir, toFileUrl } from '../utils/pluginConfig.js'
+import { replyProgress } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 
 const MANIFEST_URL = 'https://static.nanoka.cc/manifest.json';
 const ELEMENT_MAP = {
@@ -366,7 +366,6 @@ export class role_combat extends plugin {
     }
 
     const tplFile = pluginDir + '/resources/role_combat/role_combat.html';
-    const ppath = '../../../../plugins/xhh-TL/resources/';
     const renderData = {
       ...data,
       available: filteredAvailable,
@@ -383,23 +382,12 @@ export class role_combat extends plugin {
       ckMissing,
       bgImage,
     };
-    const renderScale = getRenderScaleStyle(config(), 1.5);
-    const renderResult = await e.runtime.render('xhh-TL', 'role_combat', renderData, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender({ data }) {
-        return {
-          ...data,
-          imgType: 'png',
-          sys: { scale: renderScale },
-          ppath,
-          tplFile,
-          saveId: 'role_combat',
-        };
-      }
+    return renderTpl(e, {
+      tpl: 'role_combat',
+      tplFile,
+      data: renderData,
+      baseScale: 1.5,
+      rem: true,
     });
-    const image = await toWebp(extractRenderBuffer(renderResult));
-    if (image) return replyQuote(e, segment.image(image));
-    return e.reply('渲染失败，请稍后再试');
   }
 }

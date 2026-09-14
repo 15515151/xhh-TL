@@ -1,12 +1,12 @@
 /* 立绘卡 —— 原神/星铁/绝区零体力大立绘样式 */
 body {
-  width: 900px;
+  width: 900rem;
 }
 
 .pt-card {
   position: relative;
-  width: 900px;
-  min-height: 560px;
+  width: 900rem;
+  min-height: 560rem;
   overflow: hidden;
   color: #fff;
   box-sizing: border-box;
@@ -71,25 +71,25 @@ body {
 .pt-status {
   position: relative;
   z-index: 2;
-  padding: 28px 0 0 40px;
+  padding: 28rem 0 0 40rem;
 }
 .pt-status-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 20px;
+  gap: 10rem;
+  font-size: 20rem;
   font-weight: 700;
-  margin-bottom: 14px;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  margin-bottom: 14rem;
+  text-shadow: 0 2rem 6rem rgba(0,0,0,0.6);
 }
 .pt-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 26rem;
+  height: 26rem;
   border-radius: 50%;
-  font-size: 15px;
+  font-size: 15rem;
   color: #fff;
 }
 .pt-status-item.ok .pt-dot { background: #4caf72; }
@@ -100,80 +100,80 @@ body {
 .pt-main {
   position: relative;
   z-index: 2;
-  /* 底部留出信息条（.pt-footer 绝对定位，高约 94px）的空间，
+  /* 底部留出信息条（.pt-footer 绝对定位，高约 94rem）的空间，
      否则状态条目多的游戏（鸣潮 5 条、绝区零 note_list）最后一条进度会被压在 footer 下 */
-  padding: 30px 0 110px 40px;
-  width: 500px;
+  padding: 30rem 0 110rem 40rem;
+  width: 500rem;
 }
 .pt-recover {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 12rem;
+  margin-bottom: 22rem;
 }
 .pt-recover-label {
-  font-size: 18px;
+  font-size: 18rem;
   color: #cfd8e6;
   font-weight: 600;
 }
 .pt-recover-time {
-  font-size: 18px;
+  font-size: 18rem;
   font-weight: 700;
   color: #fff;
   background: #b5402f;
-  padding: 3px 12px;
-  border-radius: 6px;
+  padding: 3rem 12rem;
+  border-radius: 6rem;
 }
 
 /* 进度条行 */
 .pt-bar-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 22px;
+  gap: 16rem;
+  margin-bottom: 22rem;
 }
 .pt-bar-icon {
-  width: 52px;
-  height: 52px;
+  width: 52rem;
+  height: 52rem;
   flex-shrink: 0;
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 2rem 4rem rgba(0,0,0,0.5));
 }
 .pt-bar-body { flex: 1; }
 .pt-bar-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 7rem;
 }
 .pt-bar-name {
-  font-size: 18px;
+  font-size: 18rem;
   font-weight: 600;
   color: #e7edf6;
 }
 .pt-bar-val {
-  font-size: 20px;
+  font-size: 20rem;
   font-weight: 700;
   color: #fff;
 }
 .pt-bar-val i {
   font-style: normal;
-  font-size: 15px;
+  font-size: 15rem;
   color: #8b97a8;
   font-weight: 500;
 }
 .pt-bar-val.warn { color: var(--accent2); }
 .pt-bar-track {
-  height: 8px;
-  border-radius: 5px;
+  height: 8rem;
+  border-radius: 5rem;
   background: rgba(255,255,255,0.12);
   overflow: hidden;
 }
 .pt-bar-fill {
   height: 100%;
-  border-radius: 5px;
+  border-radius: 5rem;
   background: linear-gradient(90deg, var(--accent), var(--accent2));
 }
 .pt-bar-fill.warn {
@@ -189,65 +189,65 @@ body {
   z-index: 3;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 18px 34px;
+  gap: 24rem;
+  padding: 18rem 34rem;
   background: linear-gradient(180deg, rgba(14,20,32,0.2), rgba(8,11,18,0.92));
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(2rem);
 }
 .pt-user {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 14rem;
   flex-shrink: 0;
 }
 .pt-avatar {
-  width: 58px;
-  height: 58px;
+  width: 58rem;
+  height: 58rem;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.25);
+  border: 2rem solid rgba(255,255,255,0.25);
   object-fit: cover;
 }
 .pt-name {
-  font-size: 22px;
+  font-size: 22rem;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8rem;
 }
-.pt-name-icon { color: var(--accent); font-size: 18px; }
+.pt-name-icon { color: var(--accent); font-size: 18rem; }
 .pt-uid {
-  margin-top: 4px;
-  font-size: 14px;
+  margin-top: 4rem;
+  font-size: 14rem;
   color: #9aa6b6;
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 5px;
-  padding: 2px 8px;
+  border: 1rem solid rgba(255,255,255,0.12);
+  border-radius: 5rem;
+  padding: 2rem 8rem;
   display: inline-block;
 }
 .pt-stats {
   display: flex;
-  gap: 30px;
+  gap: 30rem;
   margin-left: auto;
 }
 .pt-stat { text-align: center; }
 .pt-stat-val {
-  font-size: 24px;
+  font-size: 24rem;
   font-weight: 700;
   color: #fff;
 }
 .pt-stat-key {
-  font-size: 13px;
+  font-size: 13rem;
   color: #9aa6b6;
-  margin-top: 4px;
+  margin-top: 4rem;
 }
 
 .pt-brand {
   position: absolute;
-  right: 16px;
-  bottom: 4px;
+  right: 16rem;
+  bottom: 4rem;
   z-index: 4;
-  font-size: 11px;
+  font-size: 11rem;
   color: rgba(255,255,255,0.35);
   letter-spacing: 0.05em;
 }

@@ -20,8 +20,9 @@
       {{if bgImage}}background-image: url("{{bgImage}}");{{/if}}
     }
   </style>
+  <style id="rem-root">html { font-size: {{scalePx}}px; }</style>
 </head>
-<body {{sys.scale}}>
+<body>
 <div id="container" class="help">
   <div class="help-head">
     <div class="title">#队伍伤害 使用说明</div>

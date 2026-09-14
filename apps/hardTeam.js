@@ -15,9 +15,9 @@
 import moment from 'moment'
 import lodash from 'lodash'
 import { Character } from '../../miao-plugin/models/index.js'
-import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote } from '../utils/replyHelper.js'
+import { config, pluginDir } from '../utils/pluginConfig.js'
+import { replyProgress } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import { getHardRank, pickTeamList, buildAvatarUrlNameMap } from '../utils/yshelperApi.js'
 import { resolveTargetQq, resolveDisplayName, faceUrl, pickGsBgImage, loadAvatarData } from '../utils/gsHelper.js'
 
@@ -223,13 +223,11 @@ export class hardTeam extends plugin {
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = await resolveDisplayName(e, qq)
     const bgImage = pickGsBgImage('xhh-TL/hardTeam')
-    const renderScale = getRenderScaleStyle(config(), 2.0)
     // 危战配队主题：留空则跟随全部深渊主题
     const cfg = config()
     const themeRaw = String(cfg.hard_team_theme || cfg.gs_all_abyss_theme || 'light').toLowerCase()
     const theme = themeRaw === 'dark' ? 'dark' : 'light'
     const tplFile = pluginDir + '/resources/hard_team/hard_team.html'
-    const ppath = '../../../../plugins/xhh-TL/resources/'
 
     const version = data.now_version || data.version || ''
     const renderData = {
@@ -245,27 +243,12 @@ export class hardTeam extends plugin {
       sections,
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'hard_team', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'hard_team',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return replyQuote(e, segment.image(image))
-    } catch (err) {
-      logger.error('[xhh][hardTeam] 渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'hard_team',
+      tplFile,
+      data: renderData,
+      baseScale: 2.0,
+      rem: true,
+    })
   }
 }

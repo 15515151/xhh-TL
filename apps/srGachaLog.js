@@ -26,8 +26,8 @@ import plugin from '../../../lib/plugins/plugin.js'
 import { getstoken, stokenToCookie, findStokenEntry, cookiePart } from '../utils/auth.js'
 import { createUser } from '../utils/userBind.js'
 import { ensureRuntime } from '../utils/runtimePatch.js'
-import { config, pluginDir, getRenderScaleStyle, loadStokenYaml } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
+import { pluginDir, loadStokenYaml } from '../utils/pluginConfig.js'
+import { renderTpl } from '../utils/render.js'
 import { parseImportFile } from '../utils/gachaImport.js'
 import { analyse, buildLine, getIcon, poolMax } from '../utils/gachaStat.js'
 
@@ -1539,20 +1539,15 @@ export class srGachaLog extends plugin {
       return true
     }
     const tplFile = path.join(pluginDir, 'resources/gachaLog/allLog.html')
-    const renderScale = getRenderScaleStyle(config(), 1.6)
-    const res = await this.e.runtime.render('xhh-TL', 'gachaLog', data, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender: ({ data: d }) => ({
-        ...d,
-        imgType: 'png',
-        sys: { scale: renderScale },
-        ppath: '../../../../plugins/xhh-TL/resources/',
-        tplFile,
-        saveId: `gachaAll-${data.uid}`,
-      }),
+    const img = await renderTpl(this.e, {
+      tpl: 'gachaLog',
+      tplFile,
+      data,
+      baseScale: 1.6,
+      rem: true,
+      saveId: `gachaAll-${data.uid}`,
+      reply: false,
     })
-    const img = await toWebp(extractRenderBuffer(res))
     if (!img) {
       await this.reply('总览出图失败，请稍后重试', false, { at: true })
       return true
@@ -1575,21 +1570,16 @@ export class srGachaLog extends plugin {
       return true
     }
     const tplFile = path.join(pluginDir, 'resources/gachaLog/gachaLog.html')
-    // 1 倍图在手机上看着糊，这里放大渲染再压 jpeg
-    const renderScale = getRenderScaleStyle(config(), 1.6)
-    const res = await this.e.runtime.render('xhh-TL', 'gachaLog', data, {
-      retType: 'base64',
-      imgType: 'png',
-      beforeRender: ({ data: d }) => ({
-        ...d,
-        imgType: 'png',
-        sys: { scale: renderScale },
-        ppath: '../../../../plugins/xhh-TL/resources/',
-        tplFile,
-        saveId: `gachaLog-${data.uid}-${data.poolName}`,
-      }),
+    // 1 倍图在手机上看着糊，这里放大渲染再压 webp
+    const img = await renderTpl(this.e, {
+      tpl: 'gachaLog',
+      tplFile,
+      data,
+      baseScale: 1.6,
+      rem: true,
+      saveId: `gachaLog-${data.uid}-${data.poolName}`,
+      reply: false,
     })
-    const img = await toWebp(extractRenderBuffer(res))
     if (!img) {
       await this.reply('抽卡记录出图失败，请稍后重试', false, { at: true })
       return true

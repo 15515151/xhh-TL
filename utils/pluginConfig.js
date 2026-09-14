@@ -135,9 +135,19 @@ export function getRenderScale(config = {}, fallback = 1) {
 
 /** Match earth-k-plugin: template base scale multiplied by a global adjustment. */
 export function getRenderScaleStyle(config = {}, baseScale = 1) {
+  return `style=transform:scale(${getRenderScaleValue(config, baseScale)})`
+}
+
+/**
+ * 只取倍率数值（不带 style= 前缀）。
+ *
+ * 给「根字号 + rem」缩放用：外置渲染服务按 CSS 盒尺寸裁图，
+ * transform/zoom 不计入盒尺寸会被截到左上角一块，rem 的盒尺寸本身就是缩放后的。
+ */
+export function getRenderScaleValue(config = {}, baseScale = 1) {
   // 上限 2.5：兼顾清晰度与体积；可通过 render_scale 全局微调
   const scale = Math.min(2.5, Math.max(1, baseScale * getRenderScale(config, 1)))
-  return `style=transform:scale(${Number(scale.toFixed(2))})`
+  return Number(scale.toFixed(2))
 }
 
 /** 强制刷新缓存 */

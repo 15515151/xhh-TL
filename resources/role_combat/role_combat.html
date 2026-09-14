@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <link rel="stylesheet" href="{{ppath}}role_combat/role_combat.css" />
+  <style id="rem-root">html { font-size: {{scalePx}}px; }</style>
 </head>
-<body {{sys.scale}}>
+<body>
 <div class="page" id="container" {{if bgImage}}style="background: url('{{bgImage}}') center/cover no-repeat !important;"{{/if}}>
 <div class="bg-orb one"></div><div class="bg-orb two"></div>
 <main class="card">
@@ -54,10 +55,10 @@
 {{each available c}}<div class="mini"><img src="{{c.face}}"><span>{{c.name}}</span><em class="{{c.elemClass}}">{{c.elemName}}</em></div>{{/each}}
 </div>
 {{if filterApplied && !available.length}}
-<p style="text-align:center;color:#8b949e;padding:20px;">暂无符合条件的角色</p>
+<p style="text-align:center;color:#8b949e;padding:20rem;">暂无符合条件的角色</p>
 {{/if}}
 {{if ckMissing}}
-<p style="text-align:center;color:#d29922;padding:20px;">未读取到{{if queryUser}} {{queryUser}} {{/if}}的角色数据，以下为当期全部可用角色。发送 <b>#扫码登录</b> 绑定后只看自己拥有的角色</p>
+<p style="text-align:center;color:#d29922;padding:20rem;">未读取到{{if queryUser}} {{queryUser}} {{/if}}的角色数据，以下为当期全部可用角色。发送 <b>#扫码登录</b> 绑定后只看自己拥有的角色</p>
 {{/if}}
 </section>
 <footer>数据来源：Nanoka · v{{version}} · 获取时间 {{generatedAt}} · from 小火花</footer>

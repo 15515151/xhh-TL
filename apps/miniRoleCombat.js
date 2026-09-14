@@ -9,9 +9,9 @@ import YAML from 'yaml'
 import lodash from 'lodash'
 import { Character, MysApi, Player } from '../../miao-plugin/models/index.js'
 import { prepareMysContext } from '../utils/runtimePatch.js'
-import { getRenderScaleStyle, config, pluginDir } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote } from '../utils/replyHelper.js'
+import { config, pluginDir } from '../utils/pluginConfig.js'
+import { replyProgress } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import { faceUrl, pickGsBgImage } from '../utils/gsHelper.js'
 
 function intToRoman(num) {
@@ -337,8 +337,6 @@ export class miniRoleCombat extends plugin {
     const qqname = targetName || e.sender?.card || e.sender?.nickname || String(qq)
 
     const tplFile = pluginDir + '/resources/role_combat/mini_role_combat.html'
-    const ppath = '../../../../plugins/xhh-TL/resources/'
-    const renderScale = getRenderScaleStyle(config(), 1.8)
     const renderData = {
       stages,
       stageCount: stages.length,
@@ -356,27 +354,12 @@ export class miniRoleCombat extends plugin {
       generatedAt: moment().format('MM-DD HH:mm'),
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'mini_role_combat', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'mini_role_combat',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (image) return replyQuote(e, segment.image(image))
-      return e.reply('渲染失败，请稍后再试')
-    } catch (err) {
-      logger.error('[xhh][miniRoleCombat] 渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'mini_role_combat',
+      tplFile,
+      data: renderData,
+      baseScale: 1.8,
+      rem: true,
+    })
   }
 }

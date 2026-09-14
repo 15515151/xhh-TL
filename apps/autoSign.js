@@ -25,9 +25,9 @@ import { resolveAuth } from '../utils/runtimePatch.js'
 import { signOne, GAME_LABEL } from '../utils/signClient.js'
 import { runBbsVerify } from '../utils/mysVerify.js'
 import LiteMysApi from '../utils/mysClient.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { config, pluginDir, getRenderScaleStyle, pickHelpBgImage, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
+import { config, pluginDir, pickHelpBgImage, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 
 const DATA_DIR = path.join(pluginDir, 'data')
 const CONFIG_FILE = path.join(DATA_DIR, 'auto_sign.json')
@@ -485,12 +485,10 @@ export class autoSign extends plugin {
       cfg.auto_sign_theme || cfg.hold_rate_theme || cfg.gs_all_abyss_theme || 'light',
     ).toLowerCase()
     const theme = themeRaw === 'dark' ? 'dark' : 'light'
-    const renderScale = getRenderScaleStyle(cfg, 2.0)
     // CSS background 用 file:// 有截图竞态（见 pluginConfig.toDataUrl 注释），内联成 data URI
     const bgImage = toDataUrl(pickHelpBgImage({ logTag: 'xhh-TL][autoSign' }))
     const signIcon = toFileUrl(path.join(pluginDir, 'resources/help/icons/signin.webp'))
     const tplFile = path.join(pluginDir, 'resources/auto_sign/auto_sign.html')
-    const ppath = '../../../../plugins/xhh-TL/resources/'
 
     const renderData = {
       theme,
@@ -505,32 +503,15 @@ export class autoSign extends plugin {
 
     // 定时场景无真实 e，用假 e + Runtime 复用渲染引擎
     const fakeE = this.makeFakeE('0', '')
-    if (!fakeE.runtime?.render) {
-      logger?.error?.('[xhh-TL][自动签到] 渲染引擎不可用（runtime.render）')
-      return null
-    }
-    try {
-      const renderResult = await fakeE.runtime.render('xhh-TL', 'auto_sign', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'auto_sign',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return image
-    } catch (err) {
-      logger?.error?.('[xhh-TL][自动签到] 渲染失败:', err)
-      return null
-    }
+    // reply:false → 只拿 webp buffer，发送由调用方（reportGroup）负责
+    return (await renderTpl(fakeE, {
+      tpl: 'auto_sign',
+      tplFile,
+      data: renderData,
+      baseScale: 2.0,
+      rem: true,
+      reply: false,
+    })) || null
   }
 
   /** 构造假 e，供定时场景 resolveAuth/createUser/render 复用 */

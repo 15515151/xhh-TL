@@ -14,9 +14,9 @@
 import moment from 'moment'
 import lodash from 'lodash'
 import { Character } from '../../miao-plugin/models/index.js'
-import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote } from '../utils/replyHelper.js'
+import { config, pluginDir } from '../utils/pluginConfig.js'
+import { replyProgress } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import { getAbyssRank, pickHasList } from '../utils/yshelperApi.js'
 import { resolveTargetQq, resolveDisplayName, faceUrl, pickGsBgImage, loadAvatarData } from '../utils/gsHelper.js'
 
@@ -116,12 +116,10 @@ export class holdRate extends plugin {
     const qq = targetQq || e.user_id || e.sender?.user_id || ''
     const qqname = await resolveDisplayName(e, qq)
     const bgImage = pickGsBgImage('xhh-TL/holdRate')
-    const renderScale = getRenderScaleStyle(config(), 2.0)
     const cfg = config()
     const themeRaw = String(cfg.hold_rate_theme || cfg.gs_all_abyss_theme || 'light').toLowerCase()
     const theme = themeRaw === 'dark' ? 'dark' : 'light'
     const tplFile = pluginDir + '/resources/hold_rate/hold_rate.html'
-    const ppath = '../../../../plugins/xhh-TL/resources/'
 
     const version = data.now_version || data.version || ''
     const renderData = {
@@ -138,27 +136,12 @@ export class holdRate extends plugin {
       groups: built.groups,
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'hold_rate', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'hold_rate',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return replyQuote(e, segment.image(image))
-    } catch (err) {
-      logger.error('[xhh][holdRate] 渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'hold_rate',
+      tplFile,
+      data: renderData,
+      baseScale: 2.0,
+      rem: true,
+    })
   }
 }

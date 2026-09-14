@@ -16,9 +16,9 @@ import path from 'path'
 import moment from 'moment'
 import lodash from 'lodash'
 import { ArtifactSet, Character, Player, Weapon } from '../../miao-plugin/models/index.js'
-import { config, getRenderScaleStyle, pluginDir, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyProgress, replyQuote, quoteEnabled } from '../utils/replyHelper.js'
+import { config, pluginDir, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
+import { replyProgress, quoteEnabled } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import { faceUrl, resolveTargetQq, resolveDisplayName, pickGsBgImage } from '../utils/gsHelper.js'
 import { createUser } from '../utils/userBind.js'
 import {
@@ -434,28 +434,13 @@ export class teamDamage extends plugin {
       generatedAt: moment().format('MM-DD HH:mm'),
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'team_damage_help', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: getRenderScaleStyle(config(), 1.4) },
-            ppath: '../../../../plugins/xhh-TL/resources/',
-            tplFile: pluginDir + '/resources/team_damage/team_damage_help.html',
-            saveId: 'team_damage_help',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return replyQuote(e, segment.image(image))
-    } catch (err) {
-      logger.error('[xhh][teamDamage] 帮助渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'team_damage_help',
+      tplFile: pluginDir + '/resources/team_damage/team_damage_help.html',
+      data: renderData,
+      baseScale: 1.4,
+      rem: true,
+    })
   }
 
   async query(e) {
@@ -626,28 +611,13 @@ export class teamDamage extends plugin {
       generatedAt: moment().format('MM-DD HH:mm'),
     }
 
-    try {
-      const renderResult = await e.runtime.render('xhh-TL', 'team_damage', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: getRenderScaleStyle(config(), 1.4) },
-            ppath: '../../../../plugins/xhh-TL/resources/',
-            tplFile: pluginDir + '/resources/team_damage/team_damage.html',
-            saveId: 'team_damage',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return replyQuote(e, segment.image(image))
-    } catch (err) {
-      logger.error('[xhh][teamDamage] 渲染失败:', err)
-      return e.reply(`渲染失败，请稍后重试`)
-    }
+    return renderTpl(e, {
+      tpl: 'team_damage',
+      tplFile: pluginDir + '/resources/team_damage/team_damage.html',
+      data: renderData,
+      baseScale: 1.4,
+      rem: true,
+    })
   }
 }
 

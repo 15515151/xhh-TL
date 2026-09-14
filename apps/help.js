@@ -6,9 +6,9 @@ import path from 'path'
 import fs from 'fs'
 import moment from 'moment'
 import plugin from '../../../lib/plugins/plugin.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { getRenderScaleStyle, pickHelpBgImage, config, pluginDir } from '../utils/pluginConfig.js'
+import { pickHelpBgImage, pluginDir } from '../utils/pluginConfig.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 
 /** 帮助图标目录（相对插件 resources，渲染时拼到 ppath） */
 const HELP_ICON_DIR = 'help/icons'
@@ -475,28 +475,14 @@ export class help extends plugin {
         saveId: 'help',
       }
 
-      const renderScale = getRenderScaleStyle(config(), 1.5)
       const tplFile = path.join(pluginDir, 'resources/help/help.html')
-      const renderResult = await e.runtime.render('xhh-TL', 'help', data, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data: d }) {
-          return {
-            ...d,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath: '../../../../plugins/xhh-TL/resources/',
-            tplFile,
-            saveId: 'help',
-          }
-        },
+      return renderTpl(e, {
+        tpl: 'help',
+        tplFile,
+        data,
+        baseScale: 1.5,
+        rem: true,
       })
-
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) {
-        return e.reply('帮助图渲染失败，请稍后重试', quoteEnabled())
-      }
-      return e.reply(segment.image(image))
     } catch (err) {
       logger?.error?.('[xhh-TL][help]', err)
       return e.reply(`帮助图渲染失败，请稍后重试`, quoteEnabled())

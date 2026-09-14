@@ -8,9 +8,8 @@ import moment from 'moment';
 import lodash from 'lodash';
 
 import { prepareMysContext } from '../utils/runtimePatch.js';
-import { getRenderScaleStyle, config, pluginDir } from '../utils/pluginConfig.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
-import { replyQuote } from '../utils/replyHelper.js'
+import { config, pluginDir } from '../utils/pluginConfig.js'
+import { renderTpl } from '../utils/render.js'
 
 // miao-plugin 模块（动态导入）
 let MysApi, Player, Character, Common;
@@ -544,6 +543,28 @@ function buildSections({ chaosData, bossData, storyData, peakData, avatarData })
   return { sections, cols }
 }
 
+/**
+ * 遍历四个模式里所有会出现在模板上的角色，逐个回调。
+ *
+ * 这是 role 数据的唯一收集入口：模板每个节点（含 node3）都会渲染角色卡，
+ * 这里漏收一个，那张卡的天赋、光锥、遗器就会整片变成「暂无数据」。
+ * 模板改了节点结构，这里必须跟着改。
+ */
+function eachAbyssAvatar({ chaosData, storyData, bossData, peakData }, fn) {
+  const eachFloors = (floors) => {
+    lodash.forEach(floors || [], floor => {
+      lodash.forEach([floor?.node1, floor?.node2, floor?.node3], node => {
+        if (node?.avatars) lodash.forEach(node.avatars, fn);
+      });
+    });
+  };
+  eachFloors(chaosData?.floors);
+  eachFloors(storyData?.floors);
+  eachFloors(bossData?.floors);
+  lodash.forEach(peakData?.bossAvatars, fn);
+  lodash.forEach(peakData?.mobs, mob => lodash.forEach(mob?.avatars, fn));
+}
+
 // 处理开拓者ID兼容
 function matchTrailblazerId(playerAvatarIds, apiId) {
   let id = apiId * 1;
@@ -618,11 +639,13 @@ export async function allAbyss(e) {
         return false;
       }
 
-      // 获取角色信息
+      // 收集所有角色ID
       const avatarIds = [];
       const playerAvatarIds = player.getAvatarIds();
       const addAvatarId = (a) => {
         if (!a?.id) return a;
+        // 开拓者 id 跟着命途走（8001~8010），对齐账号实际拥有的那个
+        if (a.id > 8000) a.id = matchTrailblazerId(playerAvatarIds, a.id);
         if (!avatarIds.includes(a.id)) avatarIds.push(a.id);
         const char = Character.get(a.id, true);
         if (char) {
@@ -631,38 +654,7 @@ export async function allAbyss(e) {
         }
         return a;
       };
-      const addPeakAvatarId = (a) => {
-        if (!a?.id) return a;
-        if (a.id > 8000) a.id = matchTrailblazerId(playerAvatarIds, a.id);
-        return addAvatarId(a);
-      };
-
-      // 收集所有角色ID
-      if (chaosData?.floors) {
-        lodash.forEach(chaosData.floors, floor => {
-          lodash.forEach([floor.node1, floor.node2], node => {
-            if (node?.avatars) lodash.forEach(node.avatars, addAvatarId);
-          });
-        });
-      }
-      if (storyData?.floors) {
-        lodash.forEach(storyData.floors, floor => {
-          lodash.forEach([floor.node1, floor.node2], node => {
-            if (node?.avatars) lodash.forEach(node.avatars, addAvatarId);
-          });
-        });
-      }
-      if (bossData?.floors) {
-        lodash.forEach(bossData.floors, floor => {
-          lodash.forEach([floor.node1, floor.node2, floor.node3], node => {
-            if (node?.avatars) lodash.forEach(node.avatars, addAvatarId);
-          });
-        });
-      }
-      if (peakData) {
-        lodash.forEach(peakData.bossAvatars, addPeakAvatarId);
-        lodash.forEach(peakData.mobs, mob => lodash.forEach(mob.avatars, addPeakAvatarId));
-      }
+      eachAbyssAvatar({ chaosData, storyData, bossData, peakData }, addAvatarId);
 
       // 刷新角色天赋
       try {
@@ -689,11 +681,11 @@ export async function allAbyss(e) {
         });
       });
 
-      // 使用三合一模板渲染
+      // 使用三合一模板渲染。缩放走「根字号 + rem」（rem: true）——
+      // transform/zoom 不计入 CSS 盒尺寸，外置渲染服务按盒裁图只会截到左上角一块；
+      // 模板里所有尺寸都写成 rem，倍率就是唯一的缩放开关，渲染尺寸与盒尺寸一致。
       const templateName = isMobile ? 'all-abyss-mobile' : 'all-abyss';
-      const renderScale = getRenderScaleStyle(config(), isMobile ? 2.0 : 1.2);
       const tplFile = pluginDir + `/resources/${templateName}.html`;
-      const ppath = '../../../../plugins/xhh-TL/resources/';
       // 桌面版布局：整图 = body 左右 padding + 4 个模式框各自的左右 padding +
       // 4 个战绩格的宽度和 3 条间隙。宽度只跟列数有关（数据少时列数会降），跟模式数无关。
       const TILE_WIDTH = 364;
@@ -723,31 +715,14 @@ export async function allAbyss(e) {
         elemIcon,
         timeCalc
       };
-      try {
-        const renderResult = await e.runtime.render('xhh-TL', templateName, renderData, {
-          retType: 'base64',
-          imgType: 'png',
-          beforeRender({ data }) {
-            return {
-              ...data,
-              imgType: 'png',
-              sys: { scale: renderScale },
-              ppath,
-              tplFile,
-              saveId: templateName,
-            };
-          }
-        });
-        const image = await toWebp(extractRenderBuffer(renderResult));
-        if (image) return replyQuote(e, segment.image(image));
-        throw new Error('渲染结果中没有图片数据');
-      } catch (err) {
-        logger.error('[xhh-TL][allAbyss] 渲染三合一深渊失败:', err);
-        e.reply('深渊数据渲染失败，请稍后重试');
-        return false;
-      }
-
-      return true;
+      return renderTpl(e, {
+        tpl: templateName,
+        tplFile,
+        saveId: templateName,
+        data: renderData,
+        baseScale: isMobile ? 2.0 : 1.2,
+        rem: true,
+      });
     } catch (err) {
       console.error('[xhh-TL][allAbyss] error:', err);
       e.reply('深渊查询出现错误，请稍后重试');

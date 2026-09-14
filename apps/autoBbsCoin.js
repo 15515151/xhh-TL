@@ -26,12 +26,11 @@ import moment from 'moment'
 import plugin from '../../../lib/plugins/plugin.js'
 import Runtime from '../../../lib/plugins/runtime.js'
 import { runCoinTask, queryCoin, listBbsAccounts, FORUMS } from '../utils/bbsCoinClient.js'
-import { extractRenderBuffer, toWebp } from '../utils/renderImage.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
+import { renderTpl } from '../utils/render.js'
 import {
   config,
   pluginDir,
-  getRenderScaleStyle,
   pickHelpBgImage,
   toFileUrl,
   toDataUrl,
@@ -449,12 +448,10 @@ export class autoBbsCoin extends plugin {
       cfg.bbs_coin_theme || cfg.auto_sign_theme || cfg.hold_rate_theme || cfg.gs_all_abyss_theme || 'light',
     ).toLowerCase()
     const theme = themeRaw === 'dark' ? 'dark' : 'light'
-    const renderScale = getRenderScaleStyle(cfg, 2.0)
     // CSS background 用 file:// 有截图竞态（见 pluginConfig.toDataUrl 注释），内联成 data URI
     const bgImage = toDataUrl(pickHelpBgImage({ logTag: 'xhh-TL][bbsCoin' }))
     const coinIcon = toFileUrl(path.join(pluginDir, 'resources/help/icons/signin.webp'))
     const tplFile = path.join(pluginDir, 'resources/bbs_coin/bbs_coin.html')
-    const ppath = '../../../../plugins/xhh-TL/resources/'
 
     const renderData = {
       theme,
@@ -471,32 +468,15 @@ export class autoBbsCoin extends plugin {
     }
 
     const fakeE = this.makeFakeE('0', '')
-    if (!fakeE.runtime?.render) {
-      logger?.error?.('[xhh-TL][米游币] 渲染引擎不可用（runtime.render）')
-      return null
-    }
-    try {
-      const renderResult = await fakeE.runtime.render('xhh-TL', 'bbs_coin', renderData, {
-        retType: 'base64',
-        imgType: 'png',
-        beforeRender({ data }) {
-          return {
-            ...data,
-            imgType: 'png',
-            sys: { scale: renderScale },
-            ppath,
-            tplFile,
-            saveId: 'bbs_coin',
-          }
-        },
-      })
-      const image = await toWebp(extractRenderBuffer(renderResult))
-      if (!image) throw new Error('渲染结果中没有图片数据')
-      return image
-    } catch (err) {
-      logger?.error?.('[xhh-TL][米游币] 渲染失败:', err)
-      return null
-    }
+    // reply:false → 只拿 webp buffer，发送由调用方负责
+    return (await renderTpl(fakeE, {
+      tpl: 'bbs_coin',
+      tplFile,
+      data: renderData,
+      baseScale: 2.0,
+      rem: true,
+      reply: false,
+    })) || null
   }
 
   /** 构造假 e，供定时场景 render 复用 */

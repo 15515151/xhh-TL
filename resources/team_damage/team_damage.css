@@ -36,44 +36,44 @@ body {
 }
 
 #container {
-  width: 1000px;
-  padding: 18px 18px 12px;
+  width: 1000rem;
+  padding: 18rem 18rem 12rem;
   background-repeat: no-repeat;
   background-position: center top;
   background-size: cover;
   background-color: #22262e;
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 14rem;
   align-items: flex-start;
 }
 
 /* ───────────── 左栏：评级 / 饼图 / 最高一击 ───────────── */
 
 .left {
-  width: 300px;
+  width: 300rem;
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 12rem;
 }
 
 .uid {
-  font-size: 20px;
+  font-size: 20rem;
   color: var(--gold);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.7);
   background: rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  padding: 4px 10px;
+  border-radius: 8rem;
+  padding: 4rem 10rem;
 }
 
 .rank {
   background: var(--card);
-  border-radius: 14px;
-  padding: 10px;
+  border-radius: 14rem;
+  padding: 10rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 0;
+  gap: 8rem 0;
 }
 
 .rank .cell {
@@ -86,24 +86,24 @@ body {
 
 .rank .cell b {
   font-family: "PanelNumFont";
-  font-size: 30px;
+  font-size: 30rem;
   line-height: 1.1;
   color: #9ee7ff;
 }
 
 .rank .cell.big {
   width: 100%;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 4rem;
+  border-bottom: 1rem solid var(--line);
 }
 
 .rank .cell.big b {
-  font-size: 54px;
+  font-size: 54rem;
 }
 
 .rank .cell i {
   font-style: normal;
-  font-size: 15px;
+  font-size: 15rem;
   color: var(--text-dim);
 }
 
@@ -135,17 +135,17 @@ body {
 
 .pie {
   background: var(--card);
-  border-radius: 14px;
-  padding: 12px 10px 8px;
+  border-radius: 14rem;
+  padding: 12rem 10rem 8rem;
 }
 
 .pie-chart {
   position: relative;
-  width: 250px;
-  height: 250px;
+  width: 250rem;
+  height: 250rem;
   margin: 0 auto;
   border-radius: 50%;
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08) inset;
+  box-shadow: 0 0 0 4rem rgba(255, 255, 255, 0.08) inset;
 }
 
 .pie-hole {
@@ -153,15 +153,15 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 96px;
-  height: 96px;
+  width: 96rem;
+  height: 96rem;
   border-radius: 50%;
   background: var(--card-deep);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  font-size: 17rem;
   color: var(--text-dim);
   line-height: 1.2;
 }
@@ -170,41 +170,41 @@ body {
   position: absolute;
   transform: translate(-50%, -50%);
   text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.85);
 }
 
 .pie-label b {
   display: block;
-  font-size: 17px;
+  font-size: 17rem;
   color: #12161c;
 }
 
 .pie-label i {
   font-style: normal;
   font-family: "PanelNumFont";
-  font-size: 16px;
+  font-size: 16rem;
   color: #12161c;
 }
 
 .pie-legend {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 0;
+  gap: 4rem 0;
 }
 
 .pie-legend .item {
   width: 50%;
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 15px;
+  gap: 5rem;
+  font-size: 15rem;
 }
 
 .pie-legend .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 3rem;
   flex: none;
 }
 
@@ -215,27 +215,27 @@ body {
 
 .max-hit {
   background: var(--card);
-  border-radius: 14px;
-  padding: 10px 12px;
+  border-radius: 14rem;
+  padding: 10rem 12rem;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .max-hit .label {
-  font-size: 16px;
+  font-size: 16rem;
   color: var(--text-dim);
 }
 
 .max-hit .value {
   font-family: "PanelNumFont";
-  font-size: 40px;
+  font-size: 40rem;
   color: #ffd479;
   line-height: 1.15;
 }
 
 .max-hit .from {
-  font-size: 14px;
+  font-size: 14rem;
   color: var(--text-dim);
 }
 
@@ -247,37 +247,37 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 12rem;
 }
 
 .avatars {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 10rem;
 }
 
 .avatar {
-  width: calc(50% - 5px);
+  width: calc(50% - 5rem);
   background: var(--card);
-  border-radius: 14px;
-  padding: 8px 10px 10px;
+  border-radius: 14rem;
+  padding: 8rem 10rem 10rem;
 }
 
 .avatar .head {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 6rem;
 }
 
 .avatar .slot {
-  width: 58px;
+  width: 58rem;
   flex: none;
 }
 
 .avatar .slot .icon {
-  width: 58px;
-  height: 58px;
-  border-radius: 9px;
+  width: 58rem;
+  height: 58rem;
+  border-radius: 9rem;
   display: block;
   object-fit: cover;
 }
@@ -304,17 +304,17 @@ body {
 
 .avatar .slot .tags {
   display: flex;
-  gap: 2px;
-  margin-top: 2px;
+  gap: 2rem;
+  margin-top: 2rem;
 }
 
 .avatar .slot .tags span {
   flex: 1;
   text-align: center;
   font-family: "PanelNumFont";
-  font-size: 12px;
-  line-height: 17px;
-  border-radius: 4px;
+  font-size: 12rem;
+  line-height: 17rem;
+  border-radius: 4rem;
   background: var(--cons0);
   color: var(--text);
 }
@@ -352,25 +352,25 @@ body {
 }
 
 .avatar .slot.arti .arti-imgs {
-  width: 58px;
-  height: 58px;
-  border-radius: 9px;
+  width: 58rem;
+  height: 58rem;
+  border-radius: 9rem;
   background: rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
 }
 
 .avatar .slot.arti .arti-imgs img {
-  width: 58px;
-  height: 58px;
+  width: 58rem;
+  height: 58rem;
   position: absolute;
   left: 0;
   top: 0;
 }
 
 .avatar .slot.arti .arti-imgs.n2 img {
-  width: 40px;
-  height: 40px;
+  width: 40rem;
+  height: 40rem;
 }
 
 .avatar .slot.arti .arti-imgs.n2 img:first-child {
@@ -379,36 +379,36 @@ body {
 }
 
 .avatar .slot.arti .arti-imgs.n2 img:last-child {
-  left: 18px;
-  top: 18px;
+  left: 18rem;
+  top: 18rem;
 }
 
 .avatar .name-box {
   flex: 1;
-  padding-left: 2px;
+  padding-left: 2rem;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 4rem;
 }
 
 .avatar .name-box .name {
-  font-size: 20px;
+  font-size: 20rem;
   color: var(--gold);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.6);
 }
 
 .avatar .name-box .mod {
-  font-size: 12px;
-  line-height: 17px;
-  padding: 0 6px;
-  border-radius: 9px;
+  font-size: 12rem;
+  line-height: 17rem;
+  padding: 0 6rem;
+  border-radius: 9rem;
   background: rgba(255, 145, 77, 0.85);
   color: #241202;
 }
 
 .avatar .props {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
 }
@@ -418,36 +418,36 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2px 0;
+  padding: 2rem 0;
 }
 
 .avatar .props .prop b {
   font-family: "PanelNumFont";
-  font-size: 19px;
+  font-size: 19rem;
   line-height: 1.2;
 }
 
 .avatar .props .prop i {
   font-style: normal;
-  font-size: 13px;
+  font-size: 13rem;
   color: var(--text-dim);
 }
 
 .avatar .props .prop.energy svg {
-  width: 30px;
-  height: 30px;
+  width: 30rem;
+  height: 30rem;
 }
 
 .avatar .talent {
-  margin-top: 6px;
+  margin-top: 6rem;
   display: flex;
   justify-content: center;
-  gap: 14px;
+  gap: 14rem;
 }
 
 .avatar .talent > div {
-  width: 40px;
-  height: 40px;
+  width: 40rem;
+  height: 40rem;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.12);
   background-size: cover;
@@ -459,19 +459,19 @@ body {
 }
 
 .avatar .talent img {
-  width: 28px;
-  height: 28px;
+  width: 28rem;
+  height: 28rem;
 }
 
 .avatar .talent span {
   position: absolute;
-  bottom: -4px;
-  right: -4px;
-  min-width: 19px;
+  bottom: -4rem;
+  right: -4rem;
+  min-width: 19rem;
   text-align: center;
   font-family: "PanelNumFont";
-  font-size: 13px;
-  line-height: 19px;
+  font-size: 13rem;
+  line-height: 19rem;
   border-radius: 50%;
   background: var(--card-deep);
   color: var(--text);
@@ -482,17 +482,17 @@ body {
 }
 
 .avatar .mod-line {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 4rem;
 }
 
 .avatar .mod-line span {
-  font-size: 13px;
-  line-height: 19px;
-  padding: 0 7px;
-  border-radius: 10px;
+  font-size: 13rem;
+  line-height: 19rem;
+  padding: 0 7rem;
+  border-radius: 10rem;
   background: rgba(255, 145, 77, 0.22);
   color: #ffbd8f;
 }
@@ -502,28 +502,28 @@ body {
 .block {
   width: 100%;
   background: var(--card);
-  border-radius: 14px;
-  padding: 10px 12px 12px;
+  border-radius: 14rem;
+  padding: 10rem 12rem 12rem;
 }
 
 .block-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
+  gap: 8rem;
+  padding-bottom: 8rem;
+  border-bottom: 1rem solid var(--line);
 }
 
 .block-title .label {
-  font-size: 20px;
+  font-size: 20rem;
   color: var(--gold);
 }
 
 .block-title .tag {
-  font-size: 13px;
-  line-height: 20px;
-  padding: 0 8px;
-  border-radius: 10px;
+  font-size: 13rem;
+  line-height: 20rem;
+  padding: 0 8rem;
+  border-radius: 10rem;
   background: rgba(255, 255, 255, 0.14);
   color: var(--text-dim);
 }
@@ -534,22 +534,22 @@ body {
 }
 
 .block-title .note {
-  font-size: 13px;
+  font-size: 13rem;
   color: var(--text-dim);
 }
 
 .act-list {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6rem;
 }
 
 .act-list .act {
-  font-size: 15px;
-  line-height: 25px;
-  padding: 0 10px;
-  border-radius: 6px;
+  font-size: 15rem;
+  line-height: 25rem;
+  padding: 0 10rem;
+  border-radius: 6rem;
   background: rgba(125, 226, 195, 0.16);
   color: #b6f0dd;
 }
@@ -561,35 +561,35 @@ body {
 }
 
 .mod-list {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6rem;
 }
 
 .mod-list .mod-item {
-  font-size: 15px;
-  line-height: 25px;
-  padding: 0 10px;
-  border-radius: 6px;
+  font-size: 15rem;
+  line-height: 25rem;
+  padding: 0 10rem;
+  border-radius: 6rem;
   background: rgba(255, 145, 77, 0.18);
   color: #ffbd8f;
 }
 
 .rows {
   list-style: none;
-  margin: 6px 0 0;
+  margin: 6rem 0 0;
   padding: 0;
 }
 
 .rows li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  line-height: 23px;
-  padding: 1px 4px;
-  border-radius: 4px;
+  gap: 8rem;
+  font-size: 15rem;
+  line-height: 23rem;
+  padding: 1rem 4rem;
+  border-radius: 4rem;
 }
 
 .rows li:nth-child(odd) {
@@ -602,7 +602,7 @@ body {
 }
 
 .rows .t {
-  width: 52px;
+  width: 52rem;
   flex: none;
   font-family: "PanelNumFont";
   color: var(--text-dim);
@@ -610,7 +610,7 @@ body {
 }
 
 .rows .n {
-  width: 190px;
+  width: 190rem;
   flex: none;
   color: #9ee7ff;
 }
@@ -626,7 +626,7 @@ body {
 }
 
 .rows .v {
-  width: 92px;
+  width: 92rem;
   flex: none;
   text-align: right;
   font-family: "PanelNumFont";
@@ -636,85 +636,85 @@ body {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 13rem;
   color: rgba(255, 255, 255, 0.5);
-  padding: 0 4px 2px;
+  padding: 0 4rem 2rem;
 }
 
 /* ───────────── #队伍伤害帮助（team_damage_help.html）───────────── */
 
 #container.help {
-  width: 900px;
+  width: 900rem;
   display: block;
 }
 
 .help-head {
-  margin-bottom: 12px;
-  padding: 10px 14px;
+  margin-bottom: 12rem;
+  padding: 10rem 14rem;
   background: var(--card);
-  border-radius: 14px;
+  border-radius: 14rem;
 }
 
 .help-head .title {
-  font-size: 30px;
+  font-size: 30rem;
   color: var(--gold);
-  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.7);
   line-height: 1.25;
 }
 
 .help-head .sub {
-  font-size: 15px;
+  font-size: 15rem;
   color: var(--text-dim);
 }
 
 #container.help .block {
-  margin-bottom: 12px;
+  margin-bottom: 12rem;
 }
 
 .cmd-list {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 6rem;
 }
 
 .cmd-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 10rem;
   flex-wrap: wrap;
 }
 
 .cmd-row code {
   font-family: "PanelNumFont", "PanelFont", monospace;
-  font-size: 16px;
-  line-height: 26px;
-  padding: 0 10px;
-  border-radius: 6px;
+  font-size: 16rem;
+  line-height: 26rem;
+  padding: 0 10rem;
+  border-radius: 6rem;
   background: rgba(125, 226, 195, 0.16);
   color: #b6f0dd;
 }
 
 .cmd-row span {
-  font-size: 15px;
+  font-size: 15rem;
   color: var(--text-dim);
 }
 
 .kv-list {
-  margin-top: 8px;
+  margin-top: 8rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 0;
+  gap: 4rem 0;
 }
 
 .kv-row {
   width: 100%;
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-size: 15px;
+  gap: 8rem;
+  padding: 2rem 4rem;
+  border-radius: 4rem;
+  font-size: 15rem;
 }
 
 .kv-list.two .kv-row {
@@ -726,38 +726,38 @@ body {
 }
 
 .kv-row b {
-  min-width: 186px;
+  min-width: 186rem;
   font-weight: normal;
   color: #ffd479;
 }
 
 .kv-row .mean {
-  min-width: 118px;
+  min-width: 118rem;
   color: var(--text);
 }
 
 .kv-row .tip {
   flex: 1;
-  padding-left: 8px;
-  border-left: 1px solid var(--line);
+  padding-left: 8rem;
+  border-left: 1rem solid var(--line);
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 14rem;
 }
 
 .kv-list.two .kv-row {
-  padding-right: 12px;
+  padding-right: 12rem;
 }
 
 .tips {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 8rem 0 0;
   padding: 0;
 }
 
 .tips li {
   position: relative;
-  padding: 2px 0 2px 16px;
-  font-size: 15px;
+  padding: 2rem 0 2rem 16rem;
+  font-size: 15rem;
   line-height: 1.5;
   color: var(--text);
 }
@@ -765,10 +765,10 @@ body {
 .tips li::before {
   content: "";
   position: absolute;
-  left: 4px;
-  top: 11px;
-  width: 5px;
-  height: 5px;
+  left: 4rem;
+  top: 11rem;
+  width: 5rem;
+  height: 5rem;
   border-radius: 50%;
   background: var(--gold);
 }

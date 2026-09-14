@@ -2,6 +2,13 @@
 
 {{block 'css'}}
 <style>
+/* 缩放基准：模板内所有尺寸都用 rem，改这里就是整体缩放。
+   不能用 transform:scale / zoom —— 它们不计入 CSS 盒尺寸，
+   外置渲染服务按盒裁图会只截到左上角一块。 */
+html {
+  font-size: {{scalePx}}px;
+}
+
 @font-face {
   font-family: "SR";
   src: url("{{_miao_path}}common/font/HYWJ-85W.woff") format("woff");
@@ -11,7 +18,7 @@
 }
 
 body, .container {
-  width: 480px;
+  width: 480rem;
   padding: 0;
   background: #0a0e1a;
   transform-origin: 0 0;
@@ -25,7 +32,7 @@ body, .container {
 }
 
 .all-abyss-mobile {
-  width: 480px;
+  width: 480rem;
   min-height: 100%;
   color: #eef5ff;
   font-family: "SR", "汉仪文黑-65W", YS, PingFangSC-Medium, "PingFang SC", sans-serif;
@@ -48,84 +55,84 @@ body, .container {
 .all-abyss-content {
   position: relative;
   z-index: 1;
-  padding: 20px 12px;
+  padding: 20rem 12rem;
 }
 
 /* 顶部标题 */
 .all-abyss-header {
   text-align: center;
-  padding: 10px 0 20px;
+  padding: 10rem 0 20rem;
 }
 
 .all-abyss-title {
-  font-size: 28px;
+  font-size: 28rem;
   font-weight: 900;
   color: #f6e7bf;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2rem 8rem rgba(0, 0, 0, 0.6);
 }
 
 /* 每个深渊模式的卡片 */
 .abyss-section {
-  margin-bottom: 16px;
+  margin-bottom: 16rem;
   background: rgba(20, 28, 50, 0.9);
-  border: 1px solid rgba(92, 145, 210, 0.4);
-  border-radius: 12px;
+  border: 1rem solid rgba(92, 145, 210, 0.4);
+  border-radius: 12rem;
   overflow: hidden;
 }
 
 .abyss-section-header {
-  padding: 14px 16px;
+  padding: 14rem 16rem;
   background: linear-gradient(180deg, rgba(42, 120, 187, 0.6) 0%, rgba(31, 99, 163, 0.6) 100%);
-  border-bottom: 1px solid rgba(172, 213, 255, 0.28);
+  border-bottom: 1rem solid rgba(172, 213, 255, 0.28);
 }
 
 .abyss-section-title {
-  font-size: 20px;
+  font-size: 20rem;
   font-weight: 900;
   color: #f6e7bf;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.4);
 }
 
 .abyss-section-time {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 6rem;
+  font-size: 12rem;
   color: rgba(255, 255, 255, 0.55);
 }
 
 /* 统计面板 */
 .abyss-summary {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12rem 14rem;
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.08);
 }
 
 .abyss-summary-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 12rem;
 }
 
 .abyss-stars {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 22px;
+  gap: 4rem;
+  font-size: 22rem;
   font-weight: 900;
   color: #fff;
 }
 
 .abyss-stars img {
-  width: 24px;
-  height: 24px;
+  width: 24rem;
+  height: 24rem;
 }
 
 .abyss-stats {
   flex: 1;
-  font-size: 13px;
+  font-size: 13rem;
   color: rgba(255, 255, 255, 0.8);
 }
 
 .abyss-stats div {
-  margin: 2px 0;
+  margin: 2rem 0;
 }
 
 .abyss-stats b {
@@ -136,9 +143,9 @@ body, .container {
 /* Boss列表 */
 .abyss-boss-list {
   display: flex;
-  gap: 6px;
-  padding: 8px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 6rem;
+  padding: 8rem 14rem;
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.08);
 }
 
 .abyss-boss-item {
@@ -146,29 +153,29 @@ body, .container {
   display: flex;
   align-items: center;
   background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
+  border-radius: 6rem;
   overflow: hidden;
 }
 
 .abyss-boss-item span {
-  width: 36px;
-  padding-left: 6px;
-  font-size: 11px;
+  width: 36rem;
+  padding-left: 6rem;
+  font-size: 11rem;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.85);
 }
 
 .abyss-boss-item img {
   width: 100%;
-  height: 40px;
+  height: 40rem;
   object-fit: cover;
 }
 
 /* 楼层卡片 */
 .floor-card {
-  margin: 10px;
-  border: 1px solid rgba(92, 145, 210, 0.4);
-  border-radius: 10px;
+  margin: 10rem;
+  border: 1rem solid rgba(92, 145, 210, 0.4);
+  border-radius: 10rem;
   background: rgba(39, 25, 48, 0.9);
   overflow: hidden;
 }
@@ -177,21 +184,21 @@ body, .container {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 10rem 12rem;
   background: rgba(91, 69, 142, 0.9);
-  border-bottom: 1px solid rgba(172, 213, 255, 0.2);
+  border-bottom: 1rem solid rgba(172, 213, 255, 0.2);
 }
 
 .floor-name {
-  font-size: 15px;
+  font-size: 15rem;
   font-weight: 900;
   color: #e9f7ff;
 }
 
 .floor-sub {
-  font-size: 11px;
+  font-size: 11rem;
   color: rgba(255, 255, 255, 0.65);
-  margin-top: 2px;
+  margin-top: 2rem;
 }
 
 .floor-fast {
@@ -205,18 +212,18 @@ body, .container {
 
 .floor-stars {
   display: flex;
-  gap: 3px;
+  gap: 3rem;
   justify-content: flex-end;
-  margin-bottom: 2px;
+  margin-bottom: 2rem;
 }
 
 .floor-stars img {
-  width: 18px;
-  height: 18px;
+  width: 18rem;
+  height: 18rem;
 }
 
 .floor-score {
-  font-size: 13px;
+  font-size: 13rem;
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -226,8 +233,8 @@ body, .container {
 
 /* 节点 */
 .node-card {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10rem 12rem;
+  border-bottom: 1rem solid rgba(255, 255, 255, 0.06);
 }
 
 .node-card:last-child {
@@ -238,8 +245,8 @@ body, .container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: 8rem;
+  font-size: 13rem;
 }
 
 .node-name {
@@ -249,8 +256,8 @@ body, .container {
 
 .node-time {
   color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  margin-left: 6px;
+  font-size: 11rem;
+  margin-left: 6rem;
 }
 
 .node-score {
@@ -264,14 +271,14 @@ body, .container {
 /* 角色行 */
 .avatar-row {
   display: flex;
-  gap: 6px;
+  gap: 6rem;
 }
 
 .avatar-card {
-  width: 98px;
+  width: 98rem;
   flex-shrink: 0;
-  border: 1px solid rgba(130, 165, 210, 0.35);
-  border-radius: 4px 8px 6px 6px;
+  border: 1rem solid rgba(130, 165, 210, 0.35);
+  border-radius: 4rem 8rem 6rem 6rem;
   background: rgba(12, 17, 28, 0.6);
   overflow: hidden;
 }
@@ -279,7 +286,7 @@ body, .container {
 .avatar-inner {
   position: relative;
   width: 100%;
-  height: 92px;
+  height: 92rem;
   overflow: hidden;
 }
 
@@ -293,11 +300,11 @@ body, .container {
 
 .avatar-elem {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 4rem;
+  left: 4rem;
   z-index: 10;
-  width: 20px;
-  height: 20px;
+  width: 20rem;
+  height: 20rem;
   border-radius: 50%;
   background: rgba(35, 35, 35, 0.6);
   display: flex;
@@ -306,8 +313,8 @@ body, .container {
 }
 
 .avatar-elem img {
-  width: 15px;
-  height: 15px;
+  width: 15rem;
+  height: 15rem;
 }
 
 .avatar-life {
@@ -315,16 +322,16 @@ body, .container {
   top: 0;
   right: 0;
   z-index: 10;
-  width: 22px;
-  height: 22px;
-  border-radius: 0 6px 0 5px;
-  font-size: 14px;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 0 6rem 0 5rem;
+  font-size: 14rem;
   font-weight: 900;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.7);
 }
 
 .life-0 { background: rgba(80, 80, 80, 0.85); }
@@ -347,17 +354,17 @@ body, .container {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 2px 0 4px;
+  padding: 2rem 0 4rem;
   text-align: center;
   background: linear-gradient(180deg, rgba(42, 47, 71, 0.7), rgba(22, 27, 42, 0.85));
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1rem solid rgba(255, 255, 255, 0.12);
 }
 
 .avatar-level {
-  font-size: 11px;
+  font-size: 11rem;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.88);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.8);
 }
 
 .avatar-rarity-bar {
@@ -365,7 +372,7 @@ body, .container {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 2rem;
 }
 
 .rarity-5 .avatar-rarity-bar { background: #ffd170; }
@@ -374,8 +381,8 @@ body, .container {
 /* 天赋 */
 .avatar-talent {
   display: flex;
-  gap: 2px;
-  padding: 3px 2px;
+  gap: 2rem;
+  padding: 3rem 2rem;
   background: rgba(15, 22, 36, 0.85);
 }
 
@@ -384,17 +391,17 @@ body, .container {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
+  height: 16rem;
+  border: 1rem solid rgba(255, 255, 255, 0.2);
+  border-radius: 3rem;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
   color: #fff;
-  font-size: 11px;
+  font-size: 11rem;
   font-weight: 900;
 }
 
-.talent-sm { font-size: 10px; }
-.talent-xs { font-size: 9px; }
+.talent-sm { font-size: 10rem; }
+.talent-xs { font-size: 9rem; }
 
 .talent-max {
   color: #ff8c1a;
@@ -407,7 +414,7 @@ body, .container {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 4px;
+  padding: 4rem;
   background: rgba(9, 14, 24, 0.75);
 }
 
@@ -419,10 +426,10 @@ body, .container {
 
 .equip-lc-bg, .relic-pair {
   position: relative;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 5px;
+  width: 40rem;
+  height: 40rem;
+  border: 1rem solid rgba(255, 255, 255, 0.15);
+  border-radius: 5rem;
   background: #2a2630;
   overflow: hidden;
 }
@@ -443,9 +450,9 @@ body, .container {
 }
 
 .equip-lc-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 3px;
+  width: 36rem;
+  height: 36rem;
+  border-radius: 3rem;
   object-fit: cover;
 }
 
@@ -454,12 +461,12 @@ body, .container {
   right: 0;
   bottom: 0;
   z-index: 2;
-  min-width: 15px;
-  height: 15px;
-  border-radius: 4px 0 3px 0;
+  min-width: 15rem;
+  height: 15rem;
+  border-radius: 4rem 0 3rem 0;
   background: rgba(230, 100, 40, 0.9);
   color: #fff;
-  font-size: 11px;
+  font-size: 11rem;
   font-weight: 900;
   display: flex;
   align-items: center;
@@ -480,9 +487,9 @@ body, .container {
 
 .relic-img {
   position: absolute;
-  width: 36px;
-  height: 36px;
-  border-radius: 3px;
+  width: 36rem;
+  height: 36rem;
+  border-radius: 3rem;
   object-fit: cover;
 }
 
@@ -505,27 +512,27 @@ body, .container {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 40px;
+  height: 40rem;
   color: rgba(255, 255, 255, 0.3);
-  font-size: 10px;
+  font-size: 10rem;
 }
 
 /* Buff */
 .buff-box {
   display: flex;
-  gap: 8px;
-  margin: 8px 12px 12px;
-  padding: 8px 10px;
-  border-radius: 6px;
+  gap: 8rem;
+  margin: 8rem 12rem 12rem;
+  padding: 8rem 10rem;
+  border-radius: 6rem;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1rem solid rgba(255, 255, 255, 0.08);
 }
 
 .buff-icon-wrap {
-  width: 32px;
-  height: 32px;
+  width: 32rem;
+  height: 32rem;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2rem solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.2);
   display: flex;
@@ -534,13 +541,13 @@ body, .container {
 }
 
 .buff-icon {
-  width: 24px;
-  height: 24px;
+  width: 24rem;
+  height: 24rem;
   border-radius: 50%;
 }
 
 .buff-name {
-  font-size: 12px;
+  font-size: 12rem;
   line-height: 1.5;
   color: #fff;
   font-weight: 900;
@@ -552,27 +559,27 @@ body, .container {
 }
 
 .star-sep {
-  width: 1px;
-  height: 20px;
-  margin: 0 3px;
+  width: 1rem;
+  height: 20rem;
+  margin: 0 3rem;
   background: rgba(255, 255, 255, 0.3);
 }
 
 .floor-fast-tag {
   display: inline-block;
-  margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid rgba(248, 219, 106, 0.5);
-  border-radius: 3px;
+  margin-left: 6rem;
+  padding: 1rem 5rem;
+  border: 1rem solid rgba(248, 219, 106, 0.5);
+  border-radius: 3rem;
   background: rgba(0, 0, 0, 0.25);
   color: #f8db6a;
-  font-size: 11px;
-  vertical-align: 2px;
+  font-size: 11rem;
+  vertical-align: 2rem;
 }
 
 .copyright {
-  margin-top: -16px;
-  padding: 6px 0;
+  margin-top: -16rem;
+  padding: 6rem 0;
   background: transparent !important;
 }
 </style>
