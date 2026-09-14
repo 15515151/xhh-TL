@@ -29,11 +29,11 @@ function readYaml(filePath) {
   return {}
 }
 
-function makeAppDs() {
+function makeAppDs(query = '') {
   const salt = 'rtvTthKxEyreVXQCnhluFgLXPOFKPHlA'
   const t = Math.floor(Date.now() / 1000)
   const r = Math.random().toString(36).slice(2, 8)
-  const Ds = md5(`salt=${salt}&t=${t}&r=${r}`)
+  const Ds = md5(`salt=${salt}&t=${t}&r=${r}&b=&q=${query}`)
   return `${t},${r},${Ds}`
 }
 
@@ -74,13 +74,18 @@ export async function stokenToCookie(entry) {
       'x-rpc-device_id': crypto.randomUUID(),
       DS: makeAppDs(),
     }
+    // ⚠️ 两个兑换接口都要带 uid + mid：stoken 是 v2_ 开头时，老接口缺 mid 会直接
+    // 返回 -100「登录状态失效」，换不出 cookie_token（v2 stoken 用户会一直刷新失败）。
+    // 另外 DS 的 q= 必须等于 URL 的 query，否则签名对不上同样被拒。
+    const midParam = mid ? `&mid=${encodeURIComponent(mid)}` : ''
+    const authQuery = `stoken=${encodeURIComponent(stoken)}&uid=${encodeURIComponent(stuid)}${midParam}`
     const cookieRes = await fetch(
-      `https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken?stoken=${encodeURIComponent(stoken)}&uid=${encodeURIComponent(stuid)}`,
-      { method: 'GET', headers, signal: AbortSignal.timeout(12000) },
+      `https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken?${authQuery}`,
+      { method: 'GET', headers: { ...headers, DS: makeAppDs(authQuery) }, signal: AbortSignal.timeout(12000) },
     ).then((r) => r.json())
     const ltokenRes = await fetch(
-      'https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken',
-      { method: 'GET', headers: { ...headers, DS: makeAppDs() }, signal: AbortSignal.timeout(12000) },
+      `https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken?${authQuery}`,
+      { method: 'GET', headers: { ...headers, DS: makeAppDs(authQuery) }, signal: AbortSignal.timeout(12000) },
     ).then((r) => r.json())
 
     const cookieToken = cookieRes?.data?.cookie_token
