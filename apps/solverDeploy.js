@@ -36,6 +36,16 @@ async function run(cmd, args, opts = {}) {
   }
 }
 
+/** 服务是否已经在正常响应（探 /health，比看 pm2 状态更准） */
+async function isServiceAlive() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/health`, { signal: AbortSignal.timeout(4000) })
+    return res.ok
+  } catch (_) {
+    return false
+  }
+}
+
 async function has(cmd, args = ['--version']) {
   const r = await run(cmd, args)
   return r.ok
@@ -43,7 +53,9 @@ async function has(cmd, args = ['--version']) {
 
 /** 逐个 remote 试 fetch solver，返回能用的那个 remote 名 */
 async function fetchSolver() {
-  const r = await run('git', ['remote'])
+  // ★ 必须带 cwd：不带就跑到云崽根目录去了，那里的 remote 是宿主仓库的 origin，
+  //   跟本插件没关系，会取不到 solver 分支
+  const r = await run('git', ['remote'], { cwd: pluginDir })
   if (!r.ok) return { ok: false, msg: '取不到 git remote（这目录不是 git 仓库？）' }
   const remotes = r.out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
   if (!remotes.length) return { ok: false, msg: '没有配置任何 git remote' }
@@ -107,7 +119,12 @@ export class solverDeploy extends plugin {
       return true
     }
 
-    await e.reply('开始部署过码服务，可能要几分钟，稍等~', quoteEnabled())
+    // 首次要装 Python 依赖（慢），之后只是检查一下（快）
+    const firstTime = !fs.existsSync(path.join(SERVICE_DIR, '.venv', 'bin', 'python'))
+    await e.reply(
+      firstTime ? '开始部署过码服务（首次要装依赖，可能要几分钟）~' : '检查过码服务中，稍等~',
+      quoteEnabled(),
+    )
 
     // ① 系统依赖
     const missing = await this.precheck()
@@ -145,23 +162,33 @@ export class solverDeploy extends plugin {
         return true
       }
     }
-    const pip = await run(path.join('.venv', 'bin', 'pip'), ['install', '-q', 'opencv-python-headless', 'numpy'], {
-      cwd: SERVICE_DIR,
-    })
-    if (!pip.ok) {
-      await e.reply('安装识别依赖失败，请检查网络后重试', quoteEnabled())
-      return true
+    // 依赖已在就跳过（pip install 要跑几十秒，没必要每次重来）
+    const depOk = await run(path.join('.venv', 'bin', 'python'), ['-c', 'import cv2, numpy'])
+    if (!depOk.ok) {
+      const pip = await run(
+        path.join('.venv', 'bin', 'pip'),
+        ['install', '-q', 'opencv-python-headless', 'numpy'],
+        { cwd: SERVICE_DIR },
+      )
+      if (!pip.ok) {
+        await e.reply('安装识别依赖失败，请检查网络后重试', quoteEnabled())
+        return true
+      }
     }
 
-    // ④ 起服务（先清掉同名旧进程，避免端口占用）
-    await run('pm2', ['delete', PM2_NAME])
-    const start = await run('pm2', ['start', 'start.sh', '--name', PM2_NAME, '--interpreter', 'bash'], {
-      cwd: SERVICE_DIR,
-    })
-    if (!start.ok) {
-      log.error('[xhh-TL][部署] pm2 启动失败:', start.out.slice(0, 300))
-      await e.reply('启动服务失败，请检查 pm2 是否正常', quoteEnabled())
-      return true
+    // ④ 起服务。已经在跑就别动它 —— 重启会打断正在进行的过码，
+    //    也会让 start.sh 重复创建 Xvfb/openbox。
+    const running = await isServiceAlive()
+    if (!running) {
+      await run('pm2', ['delete', PM2_NAME]) // 清掉残留的失败进程，避免端口占用
+      const start = await run('pm2', ['start', 'start.sh', '--name', PM2_NAME, '--interpreter', 'bash'], {
+        cwd: SERVICE_DIR,
+      })
+      if (!start.ok) {
+        log.error('[xhh-TL][部署] pm2 启动失败:', start.out.slice(0, 300))
+        await e.reply('启动服务失败，请检查 pm2 是否正常', quoteEnabled())
+        return true
+      }
     }
 
     // ⑤ 写回配置并持久化 pm2
@@ -174,13 +201,11 @@ export class solverDeploy extends plugin {
 
     // ⑥ 验活
     await new Promise((r) => setTimeout(r, 8000))
-    let alive = false
-    try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/health`, { signal: AbortSignal.timeout(5000) })
-      alive = res.ok
-    } catch (_) {}
+    const alive = await isServiceAlive()
 
-    if (alive) {
+    if (alive && running) {
+      await e.reply('过码服务本来就在跑，配置已确认，不用再管~', quoteEnabled())
+    } else if (alive) {
       await e.reply('过码服务装好了，撞码会自动处理，不用再管~', quoteEnabled())
     } else {
       await e.reply('服务已启动但没连上，请发 #过码服务状态 看看，或稍后再试', quoteEnabled())

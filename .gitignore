@@ -10,3 +10,6 @@ config/config.yaml.bak
 
 # 鸣潮角色立绘图库：体积过大（数百 MB），不入库，用户自备
 resources/ww_role_pile/
+
+# 过码服务（放在 solver 分支）：一键部署会拉到本地，但不该提交进 master
+/service/
