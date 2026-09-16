@@ -526,7 +526,7 @@ export function supportGuoba() {
           field: 'auto_sign_verify_addr',
           label: '手动过码服务地址',
           bottomHelpMessage:
-            '内置过码用的外部打码服务（等价 GT-Manual 的 verifyAddr）。手动 #原神签到 撞验证码时，会把 uid+gt+challenge（不含 cookie）发给它，返回链接@你手划滑块。默认沿用 GT-Manual 公益地址；留空则撞码不过码只提示。该服务非本插件提供，下线/限流则过码失效',
+            '兜底用的外部打码服务（等价 GT-Manual 的 verifyAddr）：上面那个自动服务连不上或没过成功时，才会用它——把 uid+gt+challenge（不含 cookie）发给它，它返回链接让用户手划。注意内置的默认地址已失效，需要自己找一个能用的；留空则回退成只提示「发 #过码」',
           component: 'Input',
           componentProps: {
             placeholder: 'https://GT.928100.xyz/GTest/register?key=...'

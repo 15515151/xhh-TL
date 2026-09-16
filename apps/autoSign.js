@@ -162,7 +162,12 @@ export class autoSign extends plugin {
     const lines = [`${label}签到结果：`]
     for (const r of results) lines.push(`· ${r.uid}：${r.msg}`)
     if (results.some((r) => r.code === 'captcha')) {
-      lines.push(`（撞验证码的号，发 #${label}过码 点链接手划一下，再重发本条）`)
+      // 配了自动过码服务时，撞码的号已经自动处理过了，这里只说结果
+      lines.push(
+        config().auto_verify_addr
+          ? `（撞验证码的号已自动处理，重发本条即可）`
+          : `（撞验证码的号，发 #${label}过码 点链接手划一下，再重发本条）`,
+      )
     }
     e.reply(lines.join('\n'), quoteEnabled())
     return true
@@ -175,8 +180,10 @@ export class autoSign extends plugin {
     if (this._groupOnly(e)) return true
     if (this._disabled(e)) return true
     const verifyAddr = config().auto_sign_verify_addr || ''
-    if (!verifyAddr) {
-      e.reply('未配置过码服务地址，请主人到锅巴里填上后再试~', quoteEnabled())
+    const autoAddr = config().auto_verify_addr || ''
+    // 两个都没配才没得玩：自动服务是首选，手动打码地址是兜底
+    if (!autoAddr && !verifyAddr) {
+      e.reply('未配置过码服务，请主人到锅巴「米游社签到」里填上地址后再试~', quoteEnabled())
       return true
     }
 
@@ -280,7 +287,8 @@ export class autoSign extends plugin {
       }
       lines.push(`· ${a.realUid}：${ok ? '过码成功，可去签到了' : '已知问题，稍后重试'}`)
     }
-    lines.push(`过码后发 #${label}签到 即可`)
+    // 全自动时不用绕「过码后再签到」，直接说下一步发什么
+    lines.push(auto ? `现在发 #${label}签到 即可` : `过码后发 #${label}签到 即可`)
     e.reply(lines.join('\n'), quoteEnabled())
     return true
   }

@@ -69,8 +69,7 @@ game_record 实时便笺接口，纯 stoken 凭证拉不到时该行自动隐藏
 #开启自动米游币 / #关闭自动米游币  #自动米游币列表
 ```
 
-签到用稳定 `device_id` + 真设备指纹，撞码概率低；手动指令撞码可内置过码（装了本插件就能删掉
-GT-Manual）。米游币覆盖三个版块，做满约 +20~22 币/账号/天。
+签到用稳定 `device_id` + 真设备指纹，撞码概率低。米游币覆盖三个版块，做满约 +20~22 币/账号/天。
 
 **撞码自动处理**：本插件（含 genshin、miao-plugin 等走米游社的指令）一撞验证码，就会**自动过码
 并重试原请求** —— 你看到的直接是正常结果，不用做任何事、也不会收到打扰。
@@ -199,7 +198,7 @@ team_damage: true           # 队伍伤害（与 FanSky_Qs 同名指令冲突时
 - [gsuid_core](https://github.com/Genshin-bots/gsuid_core) —— 鸣潮 / 米游币凭证来源库，签到设备指纹思路
 - [StarRail-plugin](https://github.com/TsukinaKasumi/StarRail-plugin) —— 星铁深渊 API 参考
 - [ZZZeroUID](https://github.com/ZZZure/ZZZeroUID) —— 绝区零立绘
-- GT-Manual —— 过码流程参考（已内置等价实现）
+- GT-Manual —— 过码流程参考（本插件早期实现参考它，现已改为自建全自动方案）
 - [Yunzai-Bot](https://github.com/yoimiya-kokomi/Yunzai-Bot) / [TRSS-Yunzai](https://github.com/TimeRainStarSky/Yunzai) / [Guoba-Plugin](https://github.com/guoba-yunzai/guoba-plugin) —— 宿主与配置面板
 
 数据接口：米游社 / HoYoLAB 官方、[库街区](https://www.kurobbs.com/)、提瓦特小助手、
