@@ -18,6 +18,8 @@ import md5 from 'md5'
 import fetch from 'node-fetch'
 import LiteMysApi, { getServer } from './mysClient.js'
 import { runBbsVerify } from './mysVerify.js'
+import { captchaTip } from './captchaTip.js'
+import { config } from './pluginConfig.js'
 
 const log = {
   mark: (...a) => (typeof logger !== 'undefined' ? logger.mark(...a) : console.log(...a)),
@@ -165,7 +167,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
     // 撞码：手动场景(有 e) + 配了打码地址 → 当场过码再重试一次
     if (isCaptcha(signRes) && e && verifyAddr) {
       log.mark(`[xhh-TL][sign] uid=${uid} 撞验证码，尝试过码…`)
-      const ok = await runBbsVerify(e, { uid, cookie, game, device, deviceFp, verifyAddr })
+      const ok = await runBbsVerify(e, { uid, cookie, game, device, deviceFp, verifyAddr, autoVerifyAddr: config().auto_verify_addr || '' })
       if (ok) {
         ({ rc, res: signRes } = await doSign())
       }
@@ -176,7 +178,7 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
       return { code: 'already', msg: `${label} 已经签到过了，请勿重复签到`, game, uid }
     }
     if (isCaptcha(signRes)) {
-      return { code: 'captcha', msg: `${label} 签到触发验证码，请稍后重试`, game, uid }
+      return { code: 'captcha', msg: captchaTip(game), game, uid }
     }
     if ([-100, -101, 10001, -10001].includes(rc)) {
       return { code: 'expired', msg: `${label} 登录已失效，请【#刷新ck】，仍不行则【#扫码登录】`, game, uid }

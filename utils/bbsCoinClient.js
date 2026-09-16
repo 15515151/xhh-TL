@@ -449,6 +449,7 @@ export async function runCoinTask(account, opts = {}) {
           device,
           deviceFp,
           verifyAddr,
+          autoVerifyAddr: config().auto_verify_addr || '',
         })
         if (passed) signRes = await signForum(cookie, device, deviceFp, forum.gids)
       }

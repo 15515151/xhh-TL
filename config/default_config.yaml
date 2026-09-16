@@ -136,6 +136,11 @@ auto_sign_theme: ""
 # 仅手动 #原神签到 等实时指令生效；定时自动签无人手划，撞码只跳过
 auto_sign_verify_addr: "https://GT.928100.xyz/GTest/register?key=免费开源项目-您如果是交易获得则是被骗-请及时退款并举报"
 
+# 全自动过码服务地址（可选）：留空则撞码时回退到「点链接手划」。
+# 想全自动需自行部署过码服务（见仓库 solver 分支的 service/geetest/），
+# 部署好把它填成 http://127.0.0.1:8766/solve 即可
+auto_verify_addr: ""
+
 # ===== 米游币社区任务 =====
 # 与上面的「自动签到」是两回事：签到领原石走游戏 UID + cookie_token；
 # 米游币是社区做任务（版块签到+看帖+点赞+分享）赚币，走米游社账号 + stoken

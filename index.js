@@ -16,6 +16,7 @@ import { autoSign } from './apps/autoSign.js'
 import { autoBbsCoin } from './apps/autoBbsCoin.js'
 import { TLDelCkHook } from './apps/delCkHook.js'
 import { srGachaLog } from './apps/srGachaLog.js'
+import { captchaNotice } from './apps/captchaNotice.js'
 
 export {
   TL,
@@ -35,5 +36,6 @@ export {
   autoBbsCoin,
   TLDelCkHook,
   srGachaLog,
+  captchaNotice,
 }
 

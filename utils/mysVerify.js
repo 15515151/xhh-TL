@@ -183,11 +183,43 @@ async function solveGeetest(e, { uid, create, verifyAddr, polls = 80, intervalMs
 }
 
 /**
+ * 本地自动过码服务：POST {cookie} → 服务自己跑「申请→解滑块→回交」全流程。
+ * 配了 autoVerifyAddr 时优先走它，无需用户手划。
+ * @returns {Promise<boolean>} 是否过码成功
+ */
+async function solveByLocalService({ cookie, autoVerifyAddr }) {
+  try {
+    const res = await fetch(autoVerifyAddr, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cookie }),
+      signal: AbortSignal.timeout(360000),
+    }).then((r) => r.json())
+    if (res?.data?.result === 'ok') {
+      log.mark(`[xhh-TL][verify] 本地服务自动过码成功（第 ${res.data.round} 轮）`)
+      return true
+    }
+    log.mark(`[xhh-TL][verify] 本地服务未过码: ${JSON.stringify(res).slice(0, 120)}`)
+    return false
+  } catch (err) {
+    log.error(`[xhh-TL][verify] 本地服务不可用: ${err?.message}`)
+    return false
+  }
+}
+
+/**
  * 完整过码流程：申请极验 → 用户手划 → 回交清风险。
  * device/deviceFp 由调用方从 LiteMysApi 取好后传入，保证与签到重试同设备。
+ * @param {object} opts.autoVerifyAddr 本地自动过码服务地址；配了就走全自动，失败再回退手动
  * @returns {Promise<boolean>} 是否清风险成功（成功后可重试签到）
  */
-export async function runBbsVerify(e, { uid, cookie, game = 'gs', device, deviceFp, verifyAddr }) {
+export async function runBbsVerify(e, { uid, cookie, game = 'gs', device, deviceFp, verifyAddr, autoVerifyAddr }) {
+  // 全自动优先：本地服务自己完成申请→解滑块→回交，不需要用户参与
+  if (autoVerifyAddr) {
+    if (await solveByLocalService({ cookie, autoVerifyAddr })) return true
+    log.mark('[xhh-TL][verify] 自动过码未成功，回退到手动链接')
+  }
+
   if (!verifyAddr) {
     log.debug('[xhh-TL][verify] 未配置打码服务地址，跳过')
     return false

@@ -180,8 +180,8 @@ export function buildHelpGroups() {
         },
         {
           icon: 'gs-丽莎.webp',
-          title: '#米游社验证 #过码',
-          desc: '主动过码清风险；可带游戏名，默认原神。撞码时也会自动触发',
+          title: '#过码 #米游社验证 #手动过码',
+          desc: '清掉米游社验证（默认全自动）；可带游戏名（#星铁过码 / #绝区零过码），默认原神',
         },
         {
           icon: 'gs-七七.webp',

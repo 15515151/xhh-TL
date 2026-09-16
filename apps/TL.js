@@ -12,6 +12,7 @@ import { replyQuote, replyForward, quoteEnabled } from '../utils/replyHelper.js'
 import { renderTpl } from '../utils/render.js';
 import { prepareMysContext, resolveAuth } from '../utils/runtimePatch.js';
 import LiteMysApi from '../utils/mysClient.js';
+import { captchaTip } from '../utils/captchaTip.js';
 import { getWavesStaminaList, isWavesTlEnabled, listWavesAccounts } from '../utils/wavesData.js';
 
 // ============ 用户 UID 显示设置 ============
@@ -224,7 +225,7 @@ async function callApi(e, type, game, uid, server, headers, silent = false) {
         msg = `${uid ? 'UID:' + uid : ''}米游社账号异常,无法查询！`;
         break;
       case 1034: case 10035:
-        msg = '米游社查询遇到验证码，暂时无法查询！';
+        msg = captchaTip(game);
         break;
       default:
         msg = '米游社接口异常...';

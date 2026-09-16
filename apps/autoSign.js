@@ -162,7 +162,7 @@ export class autoSign extends plugin {
     const lines = [`${label}签到结果：`]
     for (const r of results) lines.push(`· ${r.uid}：${r.msg}`)
     if (results.some((r) => r.code === 'captcha')) {
-      lines.push(`（部分账号撞验证码，请重发 #${label}签到，按提示点链接手动划过）`)
+      lines.push(`（撞验证码的号，发 #${label}过码 点链接手划一下，再重发本条）`)
     }
     e.reply(lines.join('\n'), quoteEnabled())
     return true
@@ -201,7 +201,14 @@ export class autoSign extends plugin {
       return true
     }
 
-    e.reply(`开始为${label} ${uidList.length} 个账号过码，撞到验证时请按提示点链接手划~`, quoteEnabled())
+    // 配了本地服务就是全自动，不用用户划；没配才提示看链接
+    const auto = !!config().auto_verify_addr
+    e.reply(
+      auto
+        ? `开始为${label} ${uidList.length} 个账号过码，请稍等~`
+        : `开始为${label} ${uidList.length} 个账号过码，撞到验证时请按提示点链接手划~`,
+      quoteEnabled(),
+    )
 
     const lines = [`${label}过码结果：`]
     for (const uid of uidList) {
@@ -225,8 +232,8 @@ export class autoSign extends plugin {
           deviceFp = fpRes?.data?.device_fp || ''
         } catch (_) {}
 
-        const ok = await runBbsVerify(e, { uid: realUid, cookie: auth.ck, game, device, deviceFp, verifyAddr })
-        lines.push(`· ${realUid}：${ok ? '过码成功，可去签到了' : '过码未成功，请稍后重试'}`)
+        const ok = await runBbsVerify(e, { uid: realUid, cookie: auth.ck, game, device, deviceFp, verifyAddr, autoVerifyAddr: config().auto_verify_addr || '' })
+        lines.push(`· ${realUid}：${ok ? '过码成功，可去签到了' : '已知问题，稍后重试'}`)
       } catch (err) {
         logger?.error?.(`[xhh-TL][过码] ${e.user_id}/${uid} 异常: ${err.message}`)
         lines.push(`· ${uid}：过码异常`)
