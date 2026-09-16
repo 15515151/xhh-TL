@@ -17,6 +17,7 @@ import { autoBbsCoin } from './apps/autoBbsCoin.js'
 import { TLDelCkHook } from './apps/delCkHook.js'
 import { srGachaLog } from './apps/srGachaLog.js'
 import { captchaNotice } from './apps/captchaNotice.js'
+import { solverDeploy } from './apps/solverDeploy.js'
 
 export {
   TL,
@@ -37,5 +38,6 @@ export {
   TLDelCkHook,
   srGachaLog,
   captchaNotice,
+  solverDeploy,
 }
 

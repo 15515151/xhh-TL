@@ -188,6 +188,11 @@ export function buildHelpGroups() {
           title: '#签到列表',
           desc: '查看自己已开启的自动签到订阅',
         },
+        {
+          icon: 'plugin.webp',
+          title: '#过码部署 #过码服务状态',
+          desc: '一键装好全自动过码服务（Linux）；装完撞码自动处理，不用再管',
+        },
       ],
     },
     {
