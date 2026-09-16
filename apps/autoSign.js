@@ -23,7 +23,7 @@ import Runtime from '../../../lib/plugins/runtime.js'
 import { createUser } from '../utils/userBind.js'
 import { resolveAuth } from '../utils/runtimePatch.js'
 import { signOne, GAME_LABEL } from '../utils/signClient.js'
-import { runBbsVerify } from '../utils/mysVerify.js'
+import { runBbsVerify, solveBatchByLocalService } from '../utils/mysVerify.js'
 import LiteMysApi from '../utils/mysClient.js'
 import { config, pluginDir, pickHelpBgImage, toFileUrl, toDataUrl } from '../utils/pluginConfig.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
@@ -210,7 +210,8 @@ export class autoSign extends plugin {
       quoteEnabled(),
     )
 
-    const lines = [`${label}过码结果：`]
+    // 先把每个 UID 的凭证解出来（这步必须串行：resolveAuth 依赖 e 上的 uid）
+    const accounts = []
     for (const uid of uidList) {
       try {
         const authE = Object.assign(
@@ -218,27 +219,66 @@ export class autoSign extends plugin {
         )
         const auth = await resolveAuth(authE, { needCookie: true, game })
         if (!auth?.ck || !/cookie_token|account_id=/.test(auth.ck)) {
-          lines.push(`· ${uid}：无有效登录，请【#刷新ck】，仍不行则【#扫码登录】`)
+          accounts.push({ uid, realUid: uid, err: '无有效登录，请【#刷新ck】，仍不行则【#扫码登录】' })
           continue
         }
-        const realUid = auth.uid || uid
-        // 取稳定 device_id + 真 device_fp，保证与签到同设备（清风险才有效）
-        let device = ''
-        let deviceFp = ''
-        try {
-          const api = new LiteMysApi(realUid, auth.ck, { game, log: false })
-          device = api.device
-          const fpRes = await api.getData('getFp', { seed_id: String(Date.now()).slice(0, 16), Getfp: true })
-          deviceFp = fpRes?.data?.device_fp || ''
-        } catch (_) {}
-
-        const ok = await runBbsVerify(e, { uid: realUid, cookie: auth.ck, game, device, deviceFp, verifyAddr, autoVerifyAddr: config().auto_verify_addr || '' })
-        lines.push(`· ${realUid}：${ok ? '过码成功，可去签到了' : '已知问题，稍后重试'}`)
+        accounts.push({ uid, realUid: auth.uid || uid, ck: auth.ck })
       } catch (err) {
-        logger?.error?.(`[xhh-TL][过码] ${e.user_id}/${uid} 异常: ${err.message}`)
-        lines.push(`· ${uid}：过码异常`)
+        logger?.error?.(`[xhh-TL][过码] ${e.user_id}/${uid} 取凭证异常: ${err.message}`)
+        accounts.push({ uid, realUid: uid, err: '已知问题，稍后重试' })
       }
-      await new Promise((r) => setTimeout(r, 500))
+    }
+
+    const lines = [`${label}过码结果：`]
+
+    // 全自动：一次把所有账号交给服务并发跑（总耗时≈最慢那个号，不是逐个相加）
+    const okMap = new Map()
+    if (auto) {
+      const valid = accounts.filter((a) => a.ck)
+      if (valid.length) {
+        const results = await solveBatchByLocalService(
+          valid.map((a) => a.ck),
+          config().auto_verify_addr,
+        )
+        valid.forEach((a, i) => okMap.set(a.realUid, !!results[i]))
+      }
+    }
+
+    for (const a of accounts) {
+      if (a.err) {
+        lines.push(`· ${a.realUid}：${a.err}`)
+        continue
+      }
+      // 全自动已跑过；没配服务或批量没成功，再回退到逐个（手动链接）流程
+      let ok = okMap.get(a.realUid)
+      if (ok === undefined || ok === false) {
+        try {
+          let device = ''
+          let deviceFp = ''
+          try {
+            const api = new LiteMysApi(a.realUid, a.ck, { game, log: false })
+            device = api.device
+            const fpRes = await api.getData('getFp', { seed_id: String(Date.now()).slice(0, 16), Getfp: true })
+            deviceFp = fpRes?.data?.device_fp || ''
+          } catch (_) {}
+          const r = await runBbsVerify(e, {
+            uid: a.realUid,
+            cookie: a.ck,
+            game,
+            device,
+            deviceFp,
+            verifyAddr,
+            // 批量已失败过，这里不再走自动，直接手动，免得白等
+            autoVerifyAddr: ok === false ? '' : (config().auto_verify_addr || ''),
+          })
+          ok = r
+        } catch (err) {
+          logger?.error?.(`[xhh-TL][过码] ${e.user_id}/${a.realUid} 异常: ${err.message}`)
+          lines.push(`· ${a.realUid}：过码异常`)
+          continue
+        }
+      }
+      lines.push(`· ${a.realUid}：${ok ? '过码成功，可去签到了' : '已知问题，稍后重试'}`)
     }
     lines.push(`过码后发 #${label}签到 即可`)
     e.reply(lines.join('\n'), quoteEnabled())

@@ -187,7 +187,7 @@ async function solveGeetest(e, { uid, create, verifyAddr, polls = 80, intervalMs
  * 配了 autoVerifyAddr 时优先走它，无需用户手划。
  * @returns {Promise<boolean>} 是否过码成功
  */
-async function solveByLocalService({ cookie, autoVerifyAddr }) {
+export async function solveByLocalService({ cookie, autoVerifyAddr }) {
   try {
     const res = await fetch(autoVerifyAddr, {
       method: 'POST',
@@ -204,6 +204,37 @@ async function solveByLocalService({ cookie, autoVerifyAddr }) {
   } catch (err) {
     log.error(`[xhh-TL][verify] 本地服务不可用: ${err?.message}`)
     return false
+  }
+}
+
+/**
+ * 批量自动过码：一次把所有账号的 cookie 提交给服务，服务端并发跑。
+ * 多账号时总耗时≈最慢那个号，而不是逐个相加（服务端按 display 池大小并发）。
+ * @param {string[]} cookies 各账号的完整 cookie
+ * @param {string} autoVerifyAddr
+ * @returns {Promise<boolean[]>} 与 cookies 等长的结果数组
+ */
+export async function solveBatchByLocalService(cookies, autoVerifyAddr) {
+  const n = cookies.length
+  if (!autoVerifyAddr || !n) return new Array(n).fill(false)
+  try {
+    const res = await fetch(autoVerifyAddr, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cookies }),
+      signal: AbortSignal.timeout(600000),
+    }).then((r) => r.json())
+    const results = res?.data?.results
+    if (!Array.isArray(results)) {
+      log.mark(`[xhh-TL][verify] 批量过码返回异常: ${JSON.stringify(res).slice(0, 120)}`)
+      return new Array(n).fill(false)
+    }
+    const okCount = results.filter((r) => r?.ok).length
+    log.mark(`[xhh-TL][verify] 批量自动过码完成：${okCount}/${n} 成功`)
+    return results.map((r) => !!r?.ok)
+  } catch (err) {
+    log.error(`[xhh-TL][verify] 批量过码服务不可用: ${err?.message}`)
+    return new Array(n).fill(false)
   }
 }
 
