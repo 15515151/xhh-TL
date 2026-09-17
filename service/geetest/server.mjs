@@ -53,15 +53,56 @@ const PYTHON = process.env.GT_PYTHON
     path.join(DIR, '.venv', 'Scripts', 'python.exe'),  // Windows（本服务实际只支持 Linux）
   ].find((p) => fs.existsSync(p))
   || 'python3'
-const CHROMIUM = process.env.GT_CHROMIUM || '/usr/bin/chromium'
+// chromium 路径各发行版不同，按常见位置探测（也认 chrome）
+const CHROMIUM =
+  process.env.GT_CHROMIUM ||
+  [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/snap/bin/chromium',
+  ].find((p) => {
+    try {
+      return fs.existsSync(p)
+    } catch (_) {
+      return false
+    }
+  }) ||
+  'chromium'
 const PORT = Number(process.env.GT_PORT || 8766)
 const MAX_ROUNDS = Number(process.env.GT_MAX_ROUNDS || 8)
 
-// 宿主 puppeteer（优先用 Yunzai 的）
-const PLUGIN_DIR = path.dirname(DIR)  // .../service
-const ROOT = path.resolve(PLUGIN_DIR, '..', '..', '..')  // Yunzai 根
-const PUPPETEER_PATH = process.env.GT_PUPPETEER
-  || path.join(ROOT, 'node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js')
+/**
+ * 找 puppeteer。三种部署方式都要能用：
+ *   1. 装进 xhh-TL 插件里 → 往上找到 Yunzai 根的 node_modules
+ *   2. 独立安装（本目录有 node_modules，用 puppeteer-core + 系统 chromium）
+ *   3. 环境变量显式指定
+ * puppeteer-core 不下载浏览器，配合系统 chromium 用，独立部署体积小很多。
+ */
+function resolvePuppeteer() {
+  if (process.env.GT_PUPPETEER) return process.env.GT_PUPPETEER
+  const candidates = [
+    // 独立安装：本目录的 node_modules
+    path.join(DIR, 'node_modules', 'puppeteer-core', 'lib', 'esm', 'puppeteer', 'puppeteer-core.js'),
+    path.join(DIR, 'node_modules', 'puppeteer', 'lib', 'esm', 'puppeteer', 'puppeteer.js'),
+  ]
+  // 装进插件里：往上找 Yunzai 根的 node_modules
+  let up = DIR
+  for (let i = 0; i < 5; i++) {
+    up = path.dirname(up)
+    candidates.push(path.join(up, 'node_modules', 'puppeteer', 'lib', 'esm', 'puppeteer', 'puppeteer.js'))
+    candidates.push(path.join(up, 'node_modules', 'puppeteer-core', 'lib', 'esm', 'puppeteer', 'puppeteer-core.js'))
+  }
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return c
+    } catch (_) {}
+  }
+  return ''
+}
+
+const PUPPETEER_PATH = resolvePuppeteer()
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a)

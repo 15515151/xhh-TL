@@ -77,12 +77,13 @@ export class solverDeploy extends plugin {
       priority: 5000,
       rule: [
         {
-          reg: '^\\s*#?(?:过码|验证码)(?:服务)?(?:部署|安装|一键部署)\\s*$',
+          // # 必带：这条会真去拉服务、装依赖、起进程，不能让裸词在群里误触发
+          reg: '^\\s*#(?:过码|验证码)(?:服务)?(?:部署|安装|一键部署)\\s*$',
           fnc: 'deploy',
           permission: 'master',
         },
         {
-          reg: '^\\s*#?(?:过码|验证码)服务(?:状态|查看)\\s*$',
+          reg: '^\\s*#(?:过码|验证码)服务(?:状态|查看)\\s*$',
           fnc: 'status',
           permission: 'master',
         },

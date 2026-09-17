@@ -110,7 +110,8 @@ export class autoSign extends plugin {
         { reg: `^\\s*#?${GAME_ALIAS.sr}签到\\s*$`, fnc: 'signSr' },
         { reg: `^\\s*#?${GAME_ALIAS.zzz}签到\\s*$`, fnc: 'signZzz' },
         // 手动过码（主动清风险；可带游戏名指定，默认原神）
-        { reg: `^\\s*#?(?:${GAME_ALIAS.gs}|${GAME_ALIAS.sr}|${GAME_ALIAS.zzz})?(?:米游社验证|过码|手动过码)\\s*$`, fnc: 'manualVerify' },
+        // # 必带：这条会真去打接口跑过码，不能让「过码」这种裸词在群里误触发
+        { reg: `^\\s*#(?:${GAME_ALIAS.gs}|${GAME_ALIAS.sr}|${GAME_ALIAS.zzz})?(?:米游社验证|手动过码|过码)\\s*$`, fnc: 'manualVerify' },
         // 列表
         { reg: '^\\s*#?(?:自动)?签到(?:列表|状态|查询)\\s*$', fnc: 'listSubs' },
       ],
@@ -199,12 +200,18 @@ export class autoSign extends plugin {
     let uidList = []
     try {
       const user = await createUser(e.user_id, e)
-      uidList = (user.getUidList(game) || []).map((x) => String(x.uid || x)).filter(Boolean)
+      // 只取背后有登录凭证（ltuid / stuid）的 UID，与 _on、signUserGame 的过滤保持一致：
+      // 仅「注册」过的 UID（type=reg，既无 ltuid 也无 stuid）没有 ck 可换，
+      // 过码无从谈起；这类注册态还常是从别人名下带过来的，不能顺手替它过码。
+      uidList = (user.getUidList(game) || [])
+        .filter((x) => x && typeof x === 'object' && (x.ltuid || x.stuid))
+        .map((x) => String(x.uid))
+        .filter(Boolean)
     } catch (err) {
       logger?.error?.(`[xhh-TL][过码] 枚举 UID 失败 ${e.user_id}: ${err.message}`)
     }
     if (!uidList.length) {
-      e.reply(`你还没有绑定${label}账号，请先【#扫码登录】米游社~`, quoteEnabled())
+      e.reply(`你还没有扫码登录${label}账号，请先【#扫码登录】米游社~`, quoteEnabled())
       return true
     }
 
@@ -285,7 +292,7 @@ export class autoSign extends plugin {
           continue
         }
       }
-      lines.push(`· ${a.realUid}：${ok ? '过码成功，可去签到了' : '已知问题，稍后重试'}`)
+      lines.push(`· ${a.realUid}：${ok ? '过码成功' : '已知问题，稍后重试'}`)
     }
     // 全自动时不用绕「过码后再签到」，直接说下一步发什么
     lines.push(auto ? `现在发 #${label}签到 即可` : `过码后发 #${label}签到 即可`)

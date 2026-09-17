@@ -110,7 +110,10 @@ export class captchaNotice extends plugin {
         return retry
       }
       log.mark(`[xhh-TL][撞码] uid=${uid} 过码后重试仍失败: retcode=${retry?.retcode}`)
-      return this.noticeOnly(e, uid, game)
+      // 过码服务已经跑过一轮：同一份凭证的风控再让用户手划一次也不会变好
+      // （实测「过码成功」后重试仍是 1034），所以这里只说明结果，
+      // 不再发「发 #过码 点链接手划一下」那条引导
+      return this.blockedOnly(e, uid)
     } catch (err) {
       log.error(`[xhh-TL][撞码] 自动过码异常: ${err?.message}`)
       return this.noticeOnly(e, uid, game)
@@ -122,6 +125,17 @@ export class captchaNotice extends plugin {
     if (!e?.reply) return
     try {
       await e.reply(`${uid ? `UID:${uid} ` : ''}${captchaTip(game)}`, quoteEnabled())
+    } catch (err) {
+      log.error(`[xhh-TL][撞码提醒] 发送失败: ${err?.message}`)
+    }
+    suppressLegacyNotice(e)
+  }
+
+  /** 自动过码已执行、风控仍在：只说明结果，不再引导用户手划 */
+  async blockedOnly(e, uid) {
+    if (!e?.reply) return
+    try {
+      await e.reply(`${uid ? `UID:${uid} ` : ''}米游社风控中，稍后重试`, quoteEnabled())
     } catch (err) {
       log.error(`[xhh-TL][撞码提醒] 发送失败: ${err?.message}`)
     }

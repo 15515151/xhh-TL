@@ -461,7 +461,7 @@ export class help extends plugin {
       const cmdCount = groups.reduce((n, g) => n + (g.list?.length || 0), 0)
       const version = readVersion()
       const note =
-        '<b>提示</b>：指令大多可省略 #；星铁相关请带 <b>*</b> 或「星铁」前缀。' +
+        '<b>提示</b>：指令大多可省略 #（过码相关须带 #）；星铁相关请带 <b>*</b> 或「星铁」前缀。' +
         '版本指令支持 <b>列表 / 上期 / 第N期</b>；个人成绩类需先绑定账号。' +
         '鸣潮体力需主人先启用并登录鸣潮。' +
         '支持 @他人查询（对方需已绑定）。'
