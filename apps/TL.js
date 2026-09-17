@@ -1699,9 +1699,15 @@ export class TL extends plugin {
                 }
               }
               // 4) dailyNote 补拉:成功缓存结果,失败进冷却
+              // ⚠️ 这里不走 LiteMysApi，必须用本文件的 getHeaders：dailyNote 要带
+              // x-rpc-device_fp，缺了它米游社直接回 5003（同凭证同 header 下补上 fp 立刻 0，
+              // 四象限实测过：App/Web 两种 header 无 fp 都 5003，带 fp 都 0，与 header 风格无关）。
+              // getHeaders 里 fp 是常量，必带；LiteMysApi 要靠 getFp 现取，取不到就不带 → 5003。
               if (ck) {
-                const api = new LiteMysApi(uid, ck, { game: 'gs', log: false });
-                const noteRes = await api.getData('dailyNote');
+                const noteRes = await fetch(
+                  `https://api-takumi-record.mihoyo.com/game_record/app/genshin/api/dailyNote?role_id=${uid}&server=${getServer(uid, 'gs')}`,
+                  { method: 'GET', headers: getHeaders(e, ck, true), signal: AbortSignal.timeout(12000) },
+                ).then((r) => r.json()).catch(() => false);
                 if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
                   data.transformer = noteRes.data.transformer;
                   view = formatTransformer(data.transformer);
@@ -1754,7 +1760,11 @@ export class TL extends plugin {
   async noteViaCookie(e, game, cookie, uid) {
     try {
       const api = new LiteMysApi(uid, cookie, { game, log: false });
-      const res = await api.getData('dailyNote');
+      // dailyNote 必须带 x-rpc-device_fp，否则 5003。LiteMysApi 的 fp 靠 getFp 现取，
+      // 取不到（接口抖动/风控）就不带 header —— 这里钉一个兜底值，保证这条路径可用。
+      const res = await api.getData('dailyNote', {
+        headers: { 'x-rpc-device_fp': '38d7f0aac0ab7' },
+      });
       if (!res || res.retcode !== 0 || !res.data) return res || false;
       // gs/sr 的 dailyNote 字段与 widget 完全同名（gs: current_resin/max_resin/
       // resin_recovery_time/expeditions…；sr: current_stamina/max_stamina/

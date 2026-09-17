@@ -22,7 +22,9 @@ export function supportGuoba() {
       link: 'https://github.com/cchanlan/xhh-TL',
       isV3: true,
       isV2: false,
-      description: '支持原神/星铁/绝区零三游戏体力查询+全部深渊三合一'
+      description: '支持原神/星铁/绝区零三游戏体力查询+全部深渊三合一',
+      // 锅巴的插件卡片与侧边栏图标都读这里；不配的话会回退成默认图标
+      iconPath: path.join(__dirname, 'resources', 'icon.png')
     },
     configInfo: {
       schemas: [
