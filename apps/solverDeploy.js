@@ -21,6 +21,13 @@ const SERVICE_DIR = path.join(pluginDir, 'service', 'geetest')
 const PM2_NAME = 'geetest-solver'
 const PORT = 8766
 
+// 服务运行必需的文件（都在 solver 分支上）。少任何一个都跑不起来：
+// gap.py 缺了每轮算不出缺口、gt.js 缺了起不了滑块题。
+// ⚠️ 这些文件是「solver 分支跟踪、master 不跟踪」，在主工作区切分支
+//    （git checkout master）会被 git 静默删掉——而且服务进程照跑、/health 照绿，
+//    看不出异常。所以状态检查必须真去磁盘上数一遍。
+const SERVICE_FILES = ['server.mjs', 'gap.py', 'gt.js', 'start.sh']
+
 const log = {
   mark: (...a) => (typeof logger !== 'undefined' ? logger.mark(...a) : console.log(...a)),
   error: (...a) => (typeof logger !== 'undefined' ? logger.error(...a) : console.error(...a)),
@@ -49,6 +56,81 @@ async function isServiceAlive() {
 async function has(cmd, args = ['--version']) {
   const r = await run(cmd, args)
   return r.ok
+}
+
+/**
+ * 数一遍服务目录里的必需文件，返回缺失的文件名数组。
+ *
+ * 为什么要单独查这个：服务进程把代码读进内存后就与磁盘脱钩了 —— 文件被删掉时
+ * 进程照跑、端口照开、/health 照绿，只有真正发一次过码才会暴露。所以状态检查
+ * 不能只看进程和端口。
+ */
+function missingServiceFiles() {
+  return SERVICE_FILES.filter((f) => {
+    try {
+      return !fs.existsSync(path.join(SERVICE_DIR, f))
+    } catch (_) {
+      return true
+    }
+  })
+}
+
+/** 服务目录是否已经建过（用来区分「没部署」和「部署了但文件残废」） */
+function serviceDirExists() {
+  try {
+    return fs.existsSync(SERVICE_DIR)
+  } catch (_) {
+    return false
+  }
+}
+
+/**
+ * 本地服务文件是否落后于 solver 分支上的版本。
+ *
+ * 用 git 的 blob hash 比对，而不是读文件内容自己算摘要 —— 这样自动绕过换行符差异
+ * （Windows 的 core.autocrlf 会让工作区是 CRLF、仓库里是 LF），也不会因为 BOM、
+ * 编码不同之类的细节误判「需要重装」。
+ *
+ * 取不到 hash（没装 git / 不是 git 仓库 / 该分支上没有这个文件）就跳过，当作一致：
+ * 宁可漏报一次更新，也不要误报让主人白重装一遍。
+ */
+async function serviceFilesOutdated(ref) {
+  if (!ref) return false
+  for (const file of SERVICE_FILES) {
+    const disk = path.join(SERVICE_DIR, file)
+    try {
+      if (!fs.existsSync(disk)) return true
+    } catch (_) {
+      return true
+    }
+    const want = await run('git', ['rev-parse', `${ref}:service/geetest/${file}`], { cwd: pluginDir })
+    if (!want.ok || !want.out.trim()) continue
+    const got = await run('git', ['hash-object', disk], { cwd: pluginDir })
+    if (!got.ok || !got.out.trim()) continue
+    if (want.out.trim() !== got.out.trim()) return true
+  }
+  return false
+}
+
+/**
+ * 从**本地已有的引用**里找一个可用的 solver，找不到返回空串。
+ *
+ * 状态检查用这个而不是 fetchSolver：看状态应该是快的、离线的，不该为了比版本去连远端
+ * （远端不通时逐个 remote 试会卡很久）。代价是只能跟本地已有的引用比，但用户若连
+ * 引用都是旧的，那本来就该先更新插件了。
+ */
+async function findLocalSolverRef() {
+  const r = await run(
+    'git',
+    ['for-each-ref', '--format=%(refname:short)', 'refs/remotes/*/solver', 'refs/heads/solver'],
+    { cwd: pluginDir },
+  )
+  if (!r.ok) return ''
+  for (const ref of r.out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+    const t = await run('git', ['rev-parse', '--verify', `${ref}:service/geetest/server.mjs`], { cwd: pluginDir })
+    if (t.ok && t.out.trim()) return ref
+  }
+  return ''
 }
 
 /** 逐个 remote 试 fetch solver，返回能用的那个 remote 名 */
@@ -141,29 +223,41 @@ export class solverDeploy extends plugin {
       return true
     }
 
-    // ② 拉服务文件（检查全部必需文件，缺任何一个都要重新检出）
-    const need = ['server.mjs', 'start.sh', 'gap.py', 'gt.js']
-    const missingFiles = need.filter((f) => !fs.existsSync(path.join(SERVICE_DIR, f)))
-    if (missingFiles.length) {
-      log.mark(`[xhh-TL][部署] 缺少 ${missingFiles.join(', ')}，从 solver 分支检出`)
+    // ② 拉服务文件：缺文件要检出，文件旧了也要检出。
+    //    只判「缺不缺」是不够的 —— solver 上只改了内容没加文件时，缺文件判据永远是假，
+    //    服务就再也更新不到新版本了。
+    const missingFiles = missingServiceFiles()
+    let refreshed = false
+    {
       const f = await fetchSolver()
       if (!f.ok) {
-        await e.reply(`拉取服务失败：${f.msg}`, quoteEnabled())
-        return true
-      }
-      // ★ 用 restore 而不是 checkout：`checkout <ref> -- service` 会把 service 写进暂存区，
-      //   之后插件目录任何一次 commit 都会把服务代码带进 master（master 就是这么被污染的）。
-      //   restore 只写工作区、不碰索引，service 才能老老实实待在 gitignore 里。
-      //   先试引用名（fetch 已按 refspec 建出来），旧版 git 不支持 --source 就退回 checkout。
-      let co = await run('git', ['restore', '--source', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
-      if (!co.ok) {
-        co = await run('git', ['checkout', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
-        // checkout 会污染索引，立刻清掉，别让它跟着下次提交进 master
-        if (co.ok) await run('git', ['reset', '-q', '--', 'service'], { cwd: pluginDir })
-      }
-      if (!co.ok || !fs.existsSync(path.join(SERVICE_DIR, 'server.mjs'))) {
-        await e.reply('检出服务文件失败，请把插件目录更新到最新再试', quoteEnabled())
-        return true
+        // 拉不到远端时：文件齐就继续（可能只是没网），缺文件就只能到此为止
+        if (missingFiles.length) {
+          await e.reply(`拉取服务失败：${f.msg}`, quoteEnabled())
+          return true
+        }
+      } else {
+        const outdated = await serviceFilesOutdated(`${f.remote}/solver`)
+        if (missingFiles.length || outdated) {
+          log.mark(
+            `[xhh-TL][部署] ${missingFiles.length ? `缺少 ${missingFiles.join(', ')}` : '服务文件有更新'}，从 solver 分支检出`,
+          )
+          // ★ 用 restore 而不是 checkout：`checkout <ref> -- service` 会把 service 写进暂存区，
+          //   之后插件目录任何一次 commit 都会把服务代码带进 master（master 就是这么被污染的）。
+          //   restore 只写工作区、不碰索引，service 才能老老实实待在 gitignore 里。
+          //   先试引用名（fetch 已按 refspec 建出来），旧版 git 不支持 --source 就退回 checkout。
+          let co = await run('git', ['restore', '--source', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
+          if (!co.ok) {
+            co = await run('git', ['checkout', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
+            // checkout 会污染索引，立刻清掉，别让它跟着下次提交进 master
+            if (co.ok) await run('git', ['reset', '-q', '--', 'service'], { cwd: pluginDir })
+          }
+          if (!co.ok || !fs.existsSync(path.join(SERVICE_DIR, 'server.mjs'))) {
+            await e.reply('检出服务文件失败，请把插件目录更新到最新再试', quoteEnabled())
+            return true
+          }
+          refreshed = true
+        }
       }
     }
 
@@ -190,10 +284,23 @@ export class solverDeploy extends plugin {
       }
     }
 
-    // ④ 起服务。已经在跑就别动它 —— 重启会打断正在进行的过码，
-    //    也会让 start.sh 重复创建 Xvfb/openbox。
+    // ④ 起服务 / 重启服务。
+    //
+    // 服务代码是启动时读进内存的（server.mjs、gt.js 都是），光把文件换成新的
+    // 不会生效 —— 所以只要这次动过文件，就必须重启，否则就是「改了没反应」。
+    //
+    // 其余情况保持原样不动：重启会打断正在进行的过码。
+    // （start.sh 会复用已存在的 Xvfb/openbox，不会重复创建。）
     const running = await isServiceAlive()
-    if (!running) {
+    if (refreshed && running) {
+      log.mark('[xhh-TL][部署] 服务文件有更新，重启服务使其生效')
+      const rs = await run('pm2', ['restart', PM2_NAME, '--update-env'])
+      if (!rs.ok) {
+        log.error('[xhh-TL][部署] pm2 重启失败:', rs.out.slice(0, 300))
+        await e.reply('重启服务失败，请发 #过码服务状态 看看', quoteEnabled())
+        return true
+      }
+    } else if (!running) {
       await run('pm2', ['delete', PM2_NAME]) // 清掉残留的失败进程，避免端口占用
       const start = await run('pm2', ['start', 'start.sh', '--name', PM2_NAME, '--interpreter', 'bash'], {
         cwd: SERVICE_DIR,
@@ -217,7 +324,9 @@ export class solverDeploy extends plugin {
     await new Promise((r) => setTimeout(r, 8000))
     const alive = await isServiceAlive()
 
-    if (alive && running) {
+    if (alive && refreshed) {
+      await e.reply('过码服务已更新到最新版，不用再管~', quoteEnabled())
+    } else if (alive && running) {
       await e.reply('过码服务本来就在跑，配置已确认，不用再管~', quoteEnabled())
     } else if (alive) {
       await e.reply('过码服务装好了，撞码会自动处理，不用再管~', quoteEnabled())
@@ -245,10 +354,32 @@ export class solverDeploy extends plugin {
       alive = res.ok
     } catch (_) {}
     lines.push(`端口 ${PORT}：${alive ? '正常' : '连不上'}`)
+
+    // 文件完整性 —— 进程活着不代表文件还在（切分支会把服务文件删掉，
+    // 而服务早已把代码读进内存，端口照开、health 照绿，只有发过码才炸）
+    const missing = serviceDirExists() ? missingServiceFiles() : []
+    if (missing.length) {
+      lines.push(`服务文件：缺 ${missing.join('、')}`)
+    } else if (serviceDirExists()) {
+      lines.push('服务文件：完整')
+    }
+
     lines.push(`插件配置：${config().auto_verify_addr ? '已指向本机服务' : '未启用自动过码'}`)
 
-    if (!alive && !info) lines.push('', '发 #过码部署 可以一键装好')
-    else if (!alive) lines.push('', '发 #过码部署 重新装一次')
+    // 文件残废优先报：这种情况服务看着是活的，但一发过码就全轮失败
+    if (missing.length) {
+      lines.push('', '发 #过码部署 可以修好')
+    } else if (!alive && !info) {
+      lines.push('', '发 #过码部署 可以一键装好')
+    } else if (!alive) {
+      lines.push('', '发 #过码部署 重新装一次')
+    } else {
+      // 服务在跑、文件也全，再看要不要更新到 solver 上的新版本
+      const ref = await findLocalSolverRef()
+      if (ref && (await serviceFilesOutdated(ref))) {
+        lines.push('', '发 #过码部署 可以更新到新版本')
+      }
+    }
 
     await e.reply(lines.join('\n'), quoteEnabled())
     return true
