@@ -16,6 +16,10 @@ import { captchaTip } from '../utils/captchaTip.js';
 import { getWavesStaminaList, isWavesTlEnabled, listWavesAccounts } from '../utils/wavesData.js';
 import { recordResinTimer } from '../utils/resinTimer.js';
 import { roundCorners } from '../utils/renderImage.js';
+import { solveByLocalService } from '../utils/mysVerify.js';
+
+/** 质变仪补拉撞码后的重试梯度（毫秒），与 captchaNotice 同一套：总窗口 21 秒 */
+const TRANSFORMER_RETRY_GAPS = [0, 6000, 15000];
 
 // ============ 用户 UID 显示设置 ============
 async function getShowUid(qq) {
@@ -1762,11 +1766,29 @@ export class TL extends plugin {
               // x-rpc-device_fp，缺了它米游社直接回 5003（同凭证同 header 下补上 fp 立刻 0，
               // 四象限实测过：App/Web 两种 header 无 fp 都 5003，带 fp 都 0，与 header 风格无关）。
               // getHeaders 里 fp 是常量，必带；LiteMysApi 要靠 getFp 现取，取不到就不带 → 5003。
+              // ⚠️ 1034 是 game_record 域的账号级验证码风控（index/character 同码，凭证是活的），
+              // 间歇性发作：撞上就得过码，过码能解开（本地服务实测）。深渊等接口撞码有
+              // captchaNotice 兜底，这条裸 fetch 没经过 MysInfo，必须自己接过码+梯度重试。
               if (ck) {
-                const noteRes = await fetch(
-                  `https://api-takumi-record.mihoyo.com/game_record/app/genshin/api/dailyNote?role_id=${uid}&server=${getServer(uid, 'gs')}`,
-                  { method: 'GET', headers: getHeaders(e, ck, true), signal: AbortSignal.timeout(12000) },
-                ).then((r) => r.json()).catch(() => false);
+                const noteUrl = `https://api-takumi-record.mihoyo.com/game_record/app/genshin/api/dailyNote?role_id=${uid}&server=${getServer(uid, 'gs')}`;
+                const fetchNote = () => fetch(noteUrl, {
+                  method: 'GET',
+                  headers: getHeaders(e, ck, true),
+                  signal: AbortSignal.timeout(12000),
+                }).then((r) => r.json()).catch(() => false);
+                let noteRes = await fetchNote();
+                // 撞风控码且配了过码服务：自动过码后按梯度重试（过码到放行有延迟，立刻重打仍 1034）
+                if (noteRes && [1034, 10035, 10041].includes(Number(noteRes.retcode)) && config().auto_verify_addr) {
+                  logger.info?.(`[xhh-TL][transformer] dailyNote 撞码 retcode=${noteRes.retcode}，自动过码后重试`);
+                  const solved = await solveByLocalService({ cookie: ck, autoVerifyAddr: config().auto_verify_addr }).catch(() => false);
+                  if (solved) {
+                    for (const gap of TRANSFORMER_RETRY_GAPS) {
+                      if (gap) await new Promise((r) => setTimeout(r, gap));
+                      noteRes = await fetchNote();
+                      if (noteRes?.retcode === 0) break;
+                    }
+                  }
+                }
                 if (noteRes?.retcode === 0 && noteRes.data?.transformer) {
                   data.transformer = noteRes.data.transformer;
                   view = formatTransformer(data.transformer);
