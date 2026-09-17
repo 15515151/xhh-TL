@@ -110,9 +110,8 @@ export class captchaNotice extends plugin {
         return retry
       }
       log.mark(`[xhh-TL][撞码] uid=${uid} 过码后重试仍失败: retcode=${retry?.retcode}`)
-      // 过码服务已经跑过一轮：同一份凭证的风控再让用户手划一次也不会变好
-      // （实测「过码成功」后重试仍是 1034），所以这里只说明结果，
-      // 不再发「发 #过码 点链接手划一下」那条引导
+      // 过码服务已经跑过一轮：再让用户手划一次是重复劳动（过码是真生效的，
+      // 只是紧接这一枪米游社还没松口），改成让他重发本条指令
       return this.blockedOnly(e, uid)
     } catch (err) {
       log.error(`[xhh-TL][撞码] 自动过码异常: ${err?.message}`)
@@ -131,11 +130,16 @@ export class captchaNotice extends plugin {
     suppressLegacyNotice(e)
   }
 
-  /** 自动过码已执行、风控仍在：只说明结果，不再引导用户手划 */
+  /**
+   * 自动过码已执行、但紧接的重试仍被风控：
+   * 过码是生效的，只是米游社那边还没松口，用户重发一次本条指令就能拿到数据
+   * （实测重发 #深渊 即正常返回）。所以只留一句「重发本条即可」，
+   * 不再引导用户去发 #过码 手划 —— 那件事后台已经做完了。
+   */
   async blockedOnly(e, uid) {
     if (!e?.reply) return
     try {
-      await e.reply(`${uid ? `UID:${uid} ` : ''}米游社风控中，稍后重试`, quoteEnabled())
+      await e.reply(`${uid ? `UID:${uid} ` : ''}已过码，重发本条即可`, quoteEnabled())
     } catch (err) {
       log.error(`[xhh-TL][撞码提醒] 发送失败: ${err?.message}`)
     }
