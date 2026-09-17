@@ -6,9 +6,11 @@
 import path from 'path'
 import { Character, MysApi, Player } from '../../miao-plugin/models/index.js'
 import { prepareMysContext } from './runtimePatch.js'
-import { toFileUrl, pickRoleCombatBgImage } from './pluginConfig.js'
+import { toFileUrl, pickRoleCombatBgImage, pluginDir } from './pluginConfig.js'
 
-const miaoRes = process.cwd() + '/plugins/miao-plugin/resources'
+// miao 的立绘资源目录：从插件目录往上推（<云崽根>/plugins/miao-plugin/resources），
+// 不用 process.cwd() —— 那个跟着启动目录走，脱机测试或从别的目录起进程时会指错。
+const miaoRes = path.join(pluginDir, '..', 'miao-plugin', 'resources')
 
 /** 解析被 @ 的 QQ（排除 bot 自身） */
 export function resolveTargetQq(e) {

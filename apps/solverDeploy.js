@@ -13,7 +13,7 @@ import path from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import plugin from '../../../lib/plugins/plugin.js'
-import { config, pluginDir, writeUserConfig } from '../utils/pluginConfig.js'
+import { config, pluginDir, patchUserConfig } from '../utils/pluginConfig.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
 
 const exec = promisify(execFile)
@@ -325,8 +325,11 @@ export class solverDeploy extends plugin {
     }
 
     // ⑤ 写回配置并持久化 pm2
+    // ⚠️ 必须用 patchUserConfig（读-改-写），不能用 writeUserConfig —— 后者是整份覆盖，
+    // 只传一个键会把用户 config.yaml 里其余几十项全洗掉（卡片样式、回复引用、
+    // 多账号模式、鸣潮开关…全部静默回退默认值，用户毫无察觉）。
     try {
-      writeUserConfig({ auto_verify_addr: `http://127.0.0.1:${PORT}/solve` })
+      patchUserConfig({ auto_verify_addr: `http://127.0.0.1:${PORT}/solve` })
     } catch (err) {
       log.error('[xhh-TL][部署] 写配置失败:', err?.message)
     }

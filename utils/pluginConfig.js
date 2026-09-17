@@ -32,15 +32,16 @@ export const DEFAULT_STOKEN_DIRS = [
 
 /**
  * gsuid_core 数据库的默认探测位置（按顺序取第一个存在的）。
- * 前两条是 Linux 上的常见装法；后两条不带平台假设 —— gsuid_core 跟 Yunzai 并排装、
- * 或者装在家目录下时，Windows / macOS 用户也能自动找到，不必手动填配置。
+ * 不写死 /root、/home 之类的绝对路径 —— 用 os.homedir() 拼，Windows / macOS 也能命中；
+ * 再带上「跟 Yunzai 并排装」这一种（从插件目录往上推，不依赖进程 cwd）。
  * 找不到时仍可用配置项 bbs_coin_gsuid_db 指定。
  */
 export const DEFAULT_GSUID_DB_CANDIDATES = [
+  // gsuid_core 一键脚本 / docker 的默认位置
   '/opt/gsuid_core/data/GsData.db',
-  '/root/gsuid_core/data/GsData.db',
-  path.join(process.cwd(), '..', 'gsuid_core', 'data', 'GsData.db'),
   path.join(os.homedir(), 'gsuid_core', 'data', 'GsData.db'),
+  // 与 Yunzai 同级（<云崽根>/../gsuid_core）
+  path.join(pluginDir, '..', '..', '..', 'gsuid_core', 'data', 'GsData.db'),
 ]
 
 let _cache = null
@@ -53,6 +54,37 @@ function parseYamlFile(file) {
     }
   } catch (_) {}
   return {}
+}
+
+/**
+ * 解析用户配置，并把「文件坏了」与「没配过」区分开。
+ *
+ * 为什么要区分：parseYamlFile 把解析异常吞成 `{}`，于是「用户没配过这个键」和
+ * 「整个文件读不懂」变成同一种状态。mergeMissingDefaults 会认为 56 个键全部缺失，
+ * 直接覆盖写回 —— 用户手改 yaml 时缩进写错 / 用了 Tab / 打成全角冒号，
+ * 下次重启配置就被静默重置为默认值，且原文件内容一并丢失，毫无线索。
+ *
+ * @returns {{ok: true, data: object} | {ok: false, data: object}} ok=false 表示文件存在但解析失败
+ */
+function parseUserConfigFile(file) {
+  if (!fs.existsSync(file)) return { ok: true, data: {} }
+  let raw
+  try {
+    raw = fs.readFileSync(file, 'utf-8')
+  } catch (_) {
+    return { ok: false, data: {} }
+  }
+  // 空文件 / 只有注释：算「没配过」，不是坏文件
+  if (!raw.trim()) return { ok: true, data: {} }
+  try {
+    const data = YAML.parse(raw)
+    if (data === null || data === undefined) return { ok: true, data: {} }
+    if (typeof data !== 'object' || Array.isArray(data)) return { ok: false, data: {} }
+    return { ok: true, data }
+  } catch (err) {
+    logger?.error?.(`[xhh-TL][配置] config.yaml 解析失败（本次跳过补键，不覆盖原文件）: ${err?.message}`)
+    return { ok: false, data: {} }
+  }
 }
 
 function fileMtime(file) {
@@ -87,7 +119,10 @@ export function ensureUserConfig() {
 export function mergeMissingDefaults() {
   ensureUserConfig()
   const defaults = parseYamlFile(defaultConfigPath)
-  const user = parseYamlFile(userConfigPath)
+  // ⚠️ 解析失败时直接放弃本次补键：否则 user 是空对象 → 所有默认键都被当作「缺失」
+  // → 整份文件被覆盖写回，用户原有配置连同那个坏文件一起丢失。
+  const { ok, data: user } = parseUserConfigFile(userConfigPath)
+  if (!ok) return user
   let changed = false
   for (const [k, v] of Object.entries(defaults)) {
     if (!(k in user)) {
@@ -112,7 +147,8 @@ export function readPluginConfig() {
   if (_cache && _cacheKey === key) return _cache
 
   const defaults = parseYamlFile(defaultConfigPath)
-  const user = parseYamlFile(userConfigPath)
+  // 解析失败时降级成「只有默认值」（不写盘，不损坏文件），并已由 parseUserConfigFile 打日志
+  const user = parseUserConfigFile(userConfigPath).data
   _cache = { ...defaults, ...user }
   _cacheKey = key
   return _cache
@@ -128,7 +164,13 @@ export function config() {
 
 /** Resolve the global render multiplier. */
 export function getRenderScale(config = {}, fallback = 1) {
-  const value = Number(config?.render_scale)
+  const raw = config?.render_scale
+  // ⚠️ 空值走 fallback，别走下面的 clamp。锅巴的输入框清空后提交 null/''，
+  // Number(null) 和 Number('') 都是 0（Number.isFinite 为真），clamp 到下限 0.8
+  // ——用户以为「清空 = 恢复默认 1.0」，实际拿到的是允许范围的最小值，
+  // 所有卡片突然缩小 20%，而且看不出原因。
+  if (raw === null || raw === undefined || raw === '') return fallback
+  const value = Number(raw)
   if (!Number.isFinite(value)) return fallback
   return Number(Math.min(1.5, Math.max(0.8, value)).toFixed(2))
 }
