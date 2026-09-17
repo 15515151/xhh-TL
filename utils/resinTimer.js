@@ -56,6 +56,11 @@ const TYPES = ['transformer', 'homeCoin']
 let _store = null
 /** 已挂的定时器：`${game}:${uid}:${type}` → Timeout */
 const _timers = new Map()
+/**
+ * 正在投递中的提醒（fire 已开始、还没落盘 fired）。
+ * 挡住这段时间里 arm()/scheduleTimers() 的重挂，避免同一人收到多条重复推送。
+ */
+const _inflight = new Set()
 /** 由 resinPush 注册：targets 同步反查订阅者，send 异步发送 */
 let _hooks = { targets: null, send: null }
 
@@ -141,9 +146,17 @@ function readHomeCoinDeadline(data, now) {
  */
 function mergeDeadline(prev, info, now) {
   if (info.kind === 'ready') {
-    // 已挂过未来时刻、数据却说到期了（快到了 / 时钟抖动）→ 提前到当下，别丢这次提醒
-    if (prev?.state === 'armed' && prev.dueAt > now) {
-      return { dueAt: now, state: 'armed', notifiedAt: prev.notifiedAt || 0 }
+    // ⚠️ 顺序要紧：armed 必须整体处理掉，不能只处理 dueAt 在未来的那种。
+    // armed 且 dueAt 已过 = 「已到期、正在投递或正在重试」——这段窗口里 fire() 还没落盘
+    // fired，绝不能动它。原先漏了这一支，它会掉进下面的「静默置 fired」分支，
+    // 于是重试中的提醒被一次并发查询（用户发指令，或 10 分钟 cron 命中缓存视图）取消，
+    // fire() 开头 `state !== 'armed'` 直接 return → 提醒永久丢失。
+    if (prev?.state === 'armed') {
+      // 已挂过未来时刻、数据却说到期了（快到了 / 时钟抖动）→ 提前到当下，别丢这次提醒。
+      // 这是同一轮提醒的延续，attempt 要接着数，不能当成新周期清零。
+      return prev.dueAt > now
+        ? { dueAt: now, state: 'armed', notifiedAt: prev.notifiedAt || 0, attempt: prev.attempt || 0 }
+        : prev
     }
     // 提醒过、用户还没用掉 → 保持 fired，不重复打扰
     if (prev?.state === 'fired') return prev
@@ -195,9 +208,18 @@ function enabled() {
 /**
  * 挂一个定时器。超 MAX_TIMEOUT 的延时分段续挂
  * （Node 超过 2^31-1ms 会溢出立即触发，不能直接 setTimeout）。
+ *
+ * ⚠️ 正在投递（fire 的渲染+发送，实测 1.4~3.2 秒）时直接返回，不重挂。
+ * 那段时间里 state 还是 armed、dueAt 已过，而 _timers 里的 id 在回调第一行就删了，
+ * 没有这层保护的话任何 arm()/scheduleTimers() 都会再挂一个 → 同一人收到 2~3 条重复推送。
+ * 重试次数存在记录的 st.attempt 里，不从参数传（外部调用点漏传会让计数归零、永不忍弃）。
+ *
+ * @param {boolean} force 重试场景用：那时 _inflight 还没释放（在 fire 的 finally 里），
+ *                        必须绕过自己的锁，否则重试挂不上、一次失败就永不重试
  */
-function arm(game, uid, type, delay, attempt = 0) {
+function arm(game, uid, type, delay, force = false) {
   const key = timerKey(game, uid, type)
+  if (!force && _inflight.has(key)) return
   clearTimer(game, uid, type)
   const wait = Math.max(1, Math.min(Number(delay) || 0, MAX_TIMEOUT))
   const id = setTimeout(() => {
@@ -206,10 +228,9 @@ function arm(game, uid, type, delay, attempt = 0) {
     // 分段醒来：还没到点就续挂；状态已被改（用户用掉/关订阅）则不再管
     if (!st || st.state !== 'armed') return
     const left = st.dueAt - Date.now()
-    // 分段续挂要带上 attempt，否则重试计数被清零（质变仪最长 7 天碰不到 24.8 天阈值，纯防御）
-    if (left > 1000) return arm(game, uid, type, left, attempt)
+    if (left > 1000) return arm(game, uid, type, left)
     // fire 是 async 且内部已捕获发送错误，这里再兜一层防 unhandled rejection
-    fire(game, uid, type, attempt).catch((err) =>
+    fire(game, uid, type).catch((err) =>
       log.error(`[xhh-TL][resinTimer] 提醒处理异常 ${game}/${uid}/${type}: ${err?.message}`),
     )
   }, wait)
@@ -227,6 +248,8 @@ function markFired(game, uid, type) {
   if (!st) return
   st.state = 'fired'
   st.notifiedAt = Date.now()
+  // 重试计数归零：这一轮已了结，下次重新武装（用户用掉后）从 0 开始数
+  st.attempt = 0
   store[game][uid].updatedAt = Date.now()
   saveStore(store)
 }
@@ -239,9 +262,14 @@ function markFired(game, uid, type) {
  * Bot 是 undefined，发送直接抛错，而 state 已经变成 fired 不会再重试。
  * 代价是「发送成功后、落盘前」崩溃会重复提醒一次，概率极低且比漏发温和。
  *
- * @param {number} attempt 已重试次数；失败时按 RETRY_DELAY_MS 重挂，超过 MAX_RETRY 才放弃
+ * 重试次数存在记录的 `st.attempt`（不靠参数传）：arm() 有多个外部调用点
+ * （scheduleTimers / refreshUidTimers / recordResinTimer），漏传就会让计数归零、
+ * 永不忍弃，每 10 分钟白渲染一张图。存进记录后，任何路径重挂都能接着数。
  */
-async function fire(game, uid, type, attempt = 0) {
+async function fire(game, uid, type) {
+  const key = timerKey(game, uid, type)
+  // 已在投递中就别重复发（arm 的入口保护 + 这里兜一道，防同 tick 内的并发调用）
+  if (_inflight.has(key)) return
   const store = loadStore()
   const st = store?.[game]?.[uid]?.[type]
   if (!st || st.state !== 'armed') return
@@ -256,19 +284,26 @@ async function fire(game, uid, type, attempt = 0) {
     return
   }
 
+  _inflight.add(key)
   try {
     await _hooks.send?.({ game, uid, type, targets, item })
   } catch (err) {
-    const n = attempt + 1
+    const n = Number(st.attempt || 0) + 1
     // 重新取一次状态：这期间可能已被新一轮查询改写（用户用掉了 → 重新 armed）
     const cur = loadStore()?.[game]?.[uid]?.[type]
     if (n <= MAX_RETRY && cur?.state === 'armed') {
       const delay = n === 1 ? RETRY_FIRST_MS : RETRY_DELAY_MS
+      cur.attempt = n
+      const s = loadStore()
+      s[game][uid].updatedAt = Date.now()
+      saveStore(s)
       log.error(
         `[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}（第 ${n} 次），` +
           `${delay / 1000} 秒后重试: ${err?.message}`,
       )
-      arm(game, uid, type, delay, n)
+      // ⚠️ 这时 _inflight 还没释放（在 finally 里），必须 force 绕过自己的锁，
+      // 否则重试定时器挂不上，一次失败就再也不重试了。
+      arm(game, uid, type, delay, true)
     } else {
       log.error(
         `[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}，放弃: ${err?.message}`,
@@ -276,6 +311,8 @@ async function fire(game, uid, type, attempt = 0) {
       if (cur?.state === 'armed') markFired(game, uid, type)
     }
     return
+  } finally {
+    _inflight.delete(key)
   }
 
   // 发送成功才落盘（先重取状态，避免覆盖这期间别的更新）
@@ -327,7 +364,10 @@ export function recordResinTimer(game, uid, data) {
     if (!st) continue
     if (st.state === 'armed' && hasTargets(game, key)) {
       const left = st.dueAt - Date.now()
-      if (left > 0) arm(game, key, type, left)
+      // ⚠️ left <= 0 也要挂（延时 0）：mergeDeadline 可能刚把 dueAt 提前到「当下」
+      // （数据说已到期、旧记录还是未来时刻），这时不补挂的话得等原来那个未来时刻的
+      // 定时器醒来才会发，「提前」等于没生效，最长拖到下一次 scheduleTimers。
+      arm(game, key, type, left > 0 ? left : 0)
     } else {
       clearTimer(game, key, type)
     }
@@ -365,27 +405,39 @@ export function scheduleTimers() {
           clearTimer(game, uid, type)
           continue
         }
-        const left = st.dueAt - now
-        if (left > 0) {
-          arm(game, uid, type, left)
+        const plan = shouldFireNow(st, now)
+        if (plan.arm) {
+          arm(game, uid, type, plan.delay)
           armed++
-        } else if (left > -OVERDUE_GRACE_MS) {
-          // 停机期间到期（12 小时内）→ 立刻补一次
-          arm(game, uid, type, 0)
-          armed++
-        } else {
+        } else if (plan.expired) {
           // 过期太久：丢弃，等下次查询重算
           st.state = 'fired'
           st.notifiedAt = now
           clearTimer(game, uid, type)
           dirty = true
         }
+        // 其余情况（重试退避中）保持原样，退避定时器还在跑
       }
     }
   }
 
   if (dirty) saveStore(store)
   if (armed) log.info(`[xhh-TL][resinTimer] 已挂 ${armed} 个到期提醒`)
+}
+
+/**
+ * 该不该由 scheduleTimers / refreshUidTimers 立刻补发（arm 延时 0）。
+ *
+ * 「已到期 + 有订阅者」不等于「该立刻重发」：重试链路里的记录 dueAt 早就过了，
+ * 此刻它正等 15/60 秒的退避（st.attempt > 0）。这种要原样留着，让退避跑完，
+ * 否则每轮 cron 都 arm(0) 立刻重发 → 退避形同虚设、失败时疯狂渲染。
+ */
+function shouldFireNow(st, now) {
+  if (st.dueAt > now) return { arm: true, delay: st.dueAt - now }
+  // 已到期：在重试退避中就别抢
+  if (Number(st.attempt || 0) > 0) return { arm: false }
+  if (st.dueAt > now - OVERDUE_GRACE_MS) return { arm: true, delay: 0 }
+  return { arm: false, expired: true }
 }
 
 /** 单个 uid 重算（订阅变更后用，比全量轻） */
@@ -404,9 +456,8 @@ export function refreshUidTimers(game, uid) {
       clearTimer(game, String(uid), type)
       continue
     }
-    const left = st.dueAt - now
-    if (left > 0) arm(game, String(uid), type, left)
-    else if (left > -OVERDUE_GRACE_MS) arm(game, String(uid), type, 0)
+    const plan = shouldFireNow(st, now)
+    if (plan.arm) arm(game, String(uid), type, plan.delay)
   }
 }
 

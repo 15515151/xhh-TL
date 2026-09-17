@@ -1,6 +1,13 @@
 /**
- * 定时清理 data/tmp 临时渲染图
+ * 定时清理本插件的临时渲染产物
  * 默认每天 4:17 清理超过 24 小时的文件；可在 config / 锅巴 配置
+ *
+ * ⚠️ 要清的是两处，别只看 data/tmp：
+ *   - `data/tmp`：插件自己的临时目录（历史遗留，目前基本是空的）
+ *   - `<云崽根>/temp/html/<插件名>/`：**真正的大头**。Yunzai 渲染器的产物固定落在
+ *     这里（lib/renderer/Renderer.js 写死 `./temp/html/${name}/`），两个插件名各一份
+ *     （渲染时 plugin 传的是「小火花」，另一处是 xhh-TL）。Remind 卡会把立绘内联成
+ *     data URI，单个 HTML 就 1.8MB，攒起来只增不减。
  */
 
 import fs from 'fs'
@@ -12,17 +19,88 @@ import { quoteEnabled } from '../utils/replyHelper.js'
 const DEFAULT_CRON = '17 4 * * *'
 const DEFAULT_MAX_AGE_HOURS = 24
 
-function tmpDir() {
-  return path.join(pluginDir, 'data', 'tmp')
+/** 本插件在渲染器产物目录下用过的名字（render 的 plugin 参数） */
+const RENDER_NAMES = ['xhh-TL', '小火花']
+
+/**
+ * 待清理的目录列表。
+ * `temp/html/` 是宿主共享目录，别的插件（miao、genshin…）产物也在里面，
+ * **只能删本插件自己的子目录**，绝不能碰整个 temp/html。
+ */
+function tmpDirs() {
+  const dirs = [path.join(pluginDir, 'data', 'tmp')]
+  // process.cwd() 是云崽根（pm2 从根目录启动）；取不到就跳过这部分
+  try {
+    const root = process.cwd()
+    for (const name of RENDER_NAMES) {
+      dirs.push(path.join(root, 'temp', 'html', name))
+    }
+  } catch (_) {}
+  return dirs
 }
 
 /**
- * 清理 tmp 目录
+ * 删一个目录下超过 ageMs 的文件（**递归**）。
+ *
+ * ⚠️ 必须递归：渲染器的产物是 `temp/html/<插件名>/<模板名>/xxx.html`，
+ * 里面还有一层子目录，只扫一层的话一个文件都清不掉（实测 41 个产物全在子目录里）。
+ * 空目录顺手删掉，但目录本身保留（渲染器会自己建）。
+ */
+function cleanOneDir(dir, { forceAll, ageMs, now, acc, depth = 0 }) {
+  // 深度限制：正常结构就两层，防异常嵌套无限递归
+  if (depth > 4) return
+  try {
+    if (!fs.existsSync(dir)) return
+    for (const name of fs.readdirSync(dir)) {
+      const full = path.join(dir, name)
+      // 双保险：只处理确实在这个目录内的路径（防符号链接/异常名字跑出去）
+      if (!path.resolve(full).startsWith(path.resolve(dir) + path.sep)) continue
+      let st
+      try {
+        st = fs.lstatSync(full)
+      } catch {
+        continue
+      }
+      // 符号链接不跟进去（避免指到插件目录外）
+      if (st.isSymbolicLink()) continue
+      if (st.isDirectory()) {
+        cleanOneDir(full, { forceAll, ageMs, now, acc, depth: depth + 1 })
+        // 清空的子目录顺手删掉，下次渲染会重建
+        try {
+          if (fs.readdirSync(full).length === 0) fs.rmdirSync(full)
+        } catch (_) {}
+        continue
+      }
+      if (!st.isFile()) continue
+
+      const expired = forceAll || now - st.mtimeMs >= ageMs
+      if (!expired) {
+        acc.kept++
+        continue
+      }
+      try {
+        fs.unlinkSync(full)
+        acc.removed++
+        acc.freed += st.size || 0
+      } catch (err) {
+        if (typeof logger !== 'undefined') {
+          logger.warn?.(`[xhh-TL][tmp] 删除失败 ${full}: ${err.message}`)
+        }
+      }
+    }
+  } catch (err) {
+    if (typeof logger !== 'undefined') {
+      logger.error?.(`[xhh-TL][tmp] 清理 ${dir} 异常: ${err.message}`)
+    }
+  }
+}
+
+/**
+ * 清理临时产物
  * @param {{ maxAgeHours?: number, forceAll?: boolean }} opts
  * @returns {{ removed: number, kept: number, freed: number }}
  */
 export function cleanTmpDir(opts = {}) {
-  const dir = tmpDir()
   const forceAll = !!opts.forceAll
   // forceAll 才是「删全部」；普通清理时 maxAgeHours 为 0/非法应回退默认 24h，
   // 而不是当作 0 龄→删光（配置误填 0 会清空整个 tmp，且文案显示“超过 0 小时”误导）
@@ -31,48 +109,23 @@ export function cleanTmpDir(opts = {}) {
   const ageMs = forceAll ? 0 : maxAgeHours * 3600 * 1000
   const now = Date.now()
 
-  let removed = 0
-  let kept = 0
-  let freed = 0
-
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-      return { removed, kept, freed }
+  const acc = { removed: 0, kept: 0, freed: 0 }
+  const dirs = tmpDirs()
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) continue
+    } catch {
+      continue
     }
-
-    for (const name of fs.readdirSync(dir)) {
-      const full = path.join(dir, name)
-      let st
-      try {
-        st = fs.statSync(full)
-      } catch {
-        continue
-      }
-      if (!st.isFile()) continue
-
-      const expired = forceAll || now - st.mtimeMs >= ageMs
-      if (!expired) {
-        kept++
-        continue
-      }
-      try {
-        fs.unlinkSync(full)
-        removed++
-        freed += st.size || 0
-      } catch (err) {
-        if (typeof logger !== 'undefined') {
-          logger.warn?.(`[xhh-TL][tmp] 删除失败 ${name}: ${err.message}`)
-        }
-      }
-    }
-  } catch (err) {
-    if (typeof logger !== 'undefined') {
-      logger.error?.(`[xhh-TL][tmp] 清理异常: ${err.message}`)
-    }
+    cleanOneDir(dir, { forceAll, ageMs, now, acc })
   }
+  // 插件自己的临时目录不存在时补建（保持原有行为）
+  try {
+    const own = path.join(pluginDir, 'data', 'tmp')
+    if (!fs.existsSync(own)) fs.mkdirSync(own, { recursive: true })
+  } catch (_) {}
 
-  return { removed, kept, freed }
+  return acc
 }
 
 function formatBytes(n) {
@@ -89,7 +142,7 @@ export class TmpCleaner extends plugin {
 
     super({
       name: '[xhh-TL]临时文件清理',
-      dsc: '定时清理 data/tmp',
+      dsc: '定时清理出图产生的临时文件',
       event: 'message',
       priority: 5000,
       rule: [
@@ -104,7 +157,7 @@ export class TmpCleaner extends plugin {
 
     if (enabled) {
       this.task = {
-        name: 'xhh-TL-清理data/tmp',
+        name: 'xhh-TL-清理出图临时文件',
         cron,
         fnc: () => this.autoClean(),
         log: false,
