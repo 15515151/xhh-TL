@@ -294,8 +294,8 @@ export class autoSign extends plugin {
       }
       lines.push(`· ${a.realUid}：${ok ? '过码成功' : '已知问题，稍后重试'}`)
     }
-    // 全自动时不用绕「过码后再签到」，直接说下一步发什么
-    lines.push(auto ? `现在发 #${label}签到 即可` : `过码后发 #${label}签到 即可`)
+    // 不再补「现在发 #xx签到 即可」：`#过码` 是通用入口，深渊/体力/抽卡撞码都会引导过来，
+    // 预设成「去签到」对从别处来的用户是错的（用户发 #过码 时自己知道要干什么）。
     e.reply(lines.join('\n'), quoteEnabled())
     return true
   }

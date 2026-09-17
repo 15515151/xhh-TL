@@ -13,6 +13,11 @@
 const GAME_CMD = { gs: '#过码', sr: '#星铁过码', zzz: '#绝区零过码' }
 
 /**
+ * 撞码提示（**尚未过码**时用）——此时确实要用户自己点链接手划。
+ *
+ * ⚠️ 已经过过码的场景不要用这条：那件事刚做完，再让用户手划是重复劳动，
+ *    改说「重发本条即可」（见 signClient.js / captchaNotice.js 的 blockedOnly）。
+ *
  * @param {string} [game] gs / sr / zzz
  * @returns {string} 撞码提示（不含 UID）
  */

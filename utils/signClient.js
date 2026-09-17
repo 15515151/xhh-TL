@@ -165,10 +165,12 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
     let { rc, res: signRes } = await doSign()
 
     // 撞码：手动场景(有 e) + 配了打码地址 → 当场过码再重试一次
+    let verified = false
     if (isCaptcha(signRes) && e && verifyAddr) {
       log.mark(`[xhh-TL][sign] uid=${uid} 撞验证码，尝试过码…`)
       const ok = await runBbsVerify(e, { uid, cookie, game, device, deviceFp, verifyAddr, autoVerifyAddr: config().auto_verify_addr || '' })
       if (ok) {
+        verified = true
         ({ rc, res: signRes } = await doSign())
       }
     }
@@ -178,7 +180,14 @@ export async function signOne(uid, cookie, game = 'gs', opts = {}) {
       return { code: 'already', msg: `${label} 已经签到过了，请勿重复签到`, game, uid }
     }
     if (isCaptcha(signRes)) {
-      return { code: 'captcha', msg: captchaTip(game), game, uid }
+      // 已经过码过了：别再让用户去发 #过码 手划（那件事刚做完），
+      // 米游社放行有延迟，重发一次本条就能签上。
+      return {
+        code: 'captcha',
+        msg: verified ? '已过码，重发本条即可' : captchaTip(game),
+        game,
+        uid,
+      }
     }
     if ([-100, -101, 10001, -10001].includes(rc)) {
       return { code: 'expired', msg: `${label} 登录已失效，请【#刷新ck】，仍不行则【#扫码登录】`, game, uid }
