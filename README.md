@@ -216,8 +216,27 @@ team_damage: true           # 队伍伤害（与 FanSky_Qs 同名指令冲突时
 - [gsuid_core](https://github.com/Genshin-bots/gsuid_core) —— 鸣潮 / 米游币凭证来源库，签到设备指纹思路
 - [StarRail-plugin](https://github.com/TsukinaKasumi/StarRail-plugin) —— 星铁深渊 API 参考
 - [ZZZeroUID](https://github.com/ZZZure/ZZZeroUID) —— 绝区零立绘
-- GT-Manual —— 过码流程参考（本插件早期实现参考它，现已改为自建全自动方案）
 - [Yunzai-Bot](https://github.com/yoimiya-kokomi/Yunzai-Bot) / [TRSS-Yunzai](https://github.com/TimeRainStarSky/Yunzai) / [Guoba-Plugin](https://github.com/guoba-yunzai/guoba-plugin) —— 宿主与配置面板
+
+### 过码服务的来源
+
+过码功能（`solver` 分支的 `service/geetest/`）**不是从零发明的**，参考与依赖了这些项目，
+在此一并致谢：
+
+- [Amorter/biliTicker_gt](https://github.com/Amorter/biliTicker_gt)（**AGPL-3.0**）——
+  **本服务直接依赖它发布的 Python 包 `bili-ticket-gt-python`**（见 `requirements.txt`），
+  用它取 c/s 参数、拿图片地址、算缺口距离
+- [Hobr/python-geetest3](https://github.com/Hobr/python-geetest3)（GPL-3.0）——
+  `w.py` 里 w 参数的生成算法参考了它的实现思路（本仓库为独立重写）
+- [ravizhan/geetest-v3-click-crack](https://github.com/ravizhan/geetest-v3-click-crack)（AGPL-3.0）——
+  纯协议过码链路的思路参考
+- [luguoyixiazi/test_nine](https://github.com/luguoyixiazi/test_nine) ——
+  点选 / 九宫格题型的解法调研（当前未采用）
+- GT-Manual —— 过码流程参考（本插件早期实现参考它，现已改为自建全自动方案）
+
+> ⚠️ **注意 `bili-ticket-gt-python` 是 AGPL-3.0 协议**。AGPL 要求：若你把它作为网络服务
+> 提供给他人使用，需要向使用者提供完整源码。本插件仅把它用于**本机自用**的过码服务，
+> 请勿将其作为对外服务部署。如需商用，请自行替换该依赖或自行实现等价逻辑。
 
 数据接口：米游社 / HoYoLAB 官方、[库街区](https://www.kurobbs.com/)、提瓦特小助手、
 [Nanoka](https://nanoka.cc/)、[lunaris.moe](https://gi.lunaris.moe/leyline)、
@@ -225,7 +244,14 @@ team_damage: true           # 队伍伤害（与 FanSky_Qs 同名指令冲突时
 
 ## 声明
 
-仅供学习交流，请勿用于商业用途；使用本插件产生的账号风险自负。
+**本项目仅供学习交流与技术研究，请勿用于任何商业用途。**
+
+- 使用本插件及配套过码服务产生的**一切账号风险由使用者自负**，作者不承担任何责任
+- 本插件通过非官方接口获取游戏数据，与米哈游 / 库街区官方无关，也未获其授权或认可
+- 过码服务绕过了验证码这一安全机制，**请仅在你自己的账号上使用**，
+  不要用于批量注册、爬取、代练等违反服务条款的场景
+- 请遵守各平台的服务条款与当地法律法规；因使用不当造成的后果与作者无关
+- 若相关权利方认为本项目侵犯了其权益，请联系删除
 
 
 
