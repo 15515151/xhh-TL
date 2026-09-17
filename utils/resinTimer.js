@@ -38,6 +38,17 @@ const OVERDUE_GRACE_MS = 12 * 60 * 60 * 1000
 /** 记录保鲜期：7 天没被任何一次查询更新过就清掉 */
 const RECORD_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
+/**
+ * 发送失败后的重试间隔与次数上限。
+ * 最典型的失败是「重启补发」：scheduleTimers() 在插件构造期就跑，那时适配器还没连上，
+ * Bot 还是 undefined（日志时序：挂定时器 → 插件加载完 → 适配器连接，中间差好几秒）。
+ * 这种失败不能把提醒标成 fired 吞掉，得留着等 Bot 上线。
+ * 首次重试给 15 秒（适配器通常 10 秒内连上），之后退回 60 秒，避免真失败时刷屏。
+ */
+const RETRY_FIRST_MS = 15 * 1000
+const RETRY_DELAY_MS = 60 * 1000
+const MAX_RETRY = 5
+
 /** 两种提醒类型（存储键名） */
 const TYPES = ['transformer', 'homeCoin']
 
@@ -185,7 +196,7 @@ function enabled() {
  * 挂一个定时器。超 MAX_TIMEOUT 的延时分段续挂
  * （Node 超过 2^31-1ms 会溢出立即触发，不能直接 setTimeout）。
  */
-function arm(game, uid, type, delay) {
+function arm(game, uid, type, delay, attempt = 0) {
   const key = timerKey(game, uid, type)
   clearTimer(game, uid, type)
   const wait = Math.max(1, Math.min(Number(delay) || 0, MAX_TIMEOUT))
@@ -196,28 +207,78 @@ function arm(game, uid, type, delay) {
     if (!st || st.state !== 'armed') return
     const left = st.dueAt - Date.now()
     if (left > 1000) return arm(game, uid, type, left)
-    fire(game, uid, type)
+    // fire 是 async 且内部已捕获发送错误，这里再兜一层防 unhandled rejection
+    fire(game, uid, type, attempt).catch((err) =>
+      log.error(`[xhh-TL][resinTimer] 提醒处理异常 ${game}/${uid}/${type}: ${err?.message}`),
+    )
   }, wait)
   _timers.set(key, id)
 }
 
-/** 到点：先落盘 fired 再发送 —— 崩溃/重启只会漏发，不会重复打扰 */
-async function fire(game, uid, type) {
+/**
+ * 到点：发送成功才落盘 fired。
+ *
+ * ⚠️ 顺序不能反。原先写成「先落盘 fired 再发送」，一旦发送失败这条提醒就**永久丢了**
+ * —— 重启补发必然踩中：scheduleTimers() 在插件构造期跑，那时适配器还没连上、
+ * Bot 是 undefined，发送直接抛错，而 state 已经变成 fired 不会再重试。
+ * 代价是「发送成功后、落盘前」崩溃会重复提醒一次，概率极低且比漏发温和。
+ *
+ * @param {number} attempt 已重试次数；失败时按 RETRY_DELAY_MS 重挂，超过 MAX_RETRY 才放弃
+ */
+async function fire(game, uid, type, attempt = 0) {
   const store = loadStore()
   const st = store?.[game]?.[uid]?.[type]
   if (!st || st.state !== 'armed') return
 
   const targets = hasTargets(game, uid) ? _hooks.targets(game, uid) || [] : []
-  st.state = 'fired'
-  st.notifiedAt = Date.now()
-  store[game][uid].updatedAt = Date.now()
-  saveStore(store)
+  // 出图用的精简快照（记录里存的那份，不重查接口）
+  const item = store[game][uid].snap || { uid: String(uid) }
 
-  if (!targets.length) return
+  // 没有订阅者：直接标 fired，不必重试（用户可能刚关掉推送）
+  if (!targets.length) {
+    st.state = 'fired'
+    st.notifiedAt = Date.now()
+    store[game][uid].updatedAt = Date.now()
+    saveStore(store)
+    return
+  }
+
   try {
-    await _hooks.send?.({ game, uid, type, targets })
+    await _hooks.send?.({ game, uid, type, targets, item })
   } catch (err) {
-    log.error(`[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}: ${err?.message}`)
+    const n = attempt + 1
+    // 重试前重新读盘：这期间记录可能已被新一轮查询改写（用户用掉了 → 重新 armed）
+    const cur = loadStore()?.[game]?.[uid]?.[type]
+    if (n <= MAX_RETRY && cur?.state === 'armed') {
+      const delay = n === 1 ? RETRY_FIRST_MS : RETRY_DELAY_MS
+      log.error(
+        `[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}（第 ${n} 次），` +
+          `${delay / 1000} 秒后重试: ${err?.message}`,
+      )
+      arm(game, uid, type, delay, n)
+    } else {
+      log.error(
+        `[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}，放弃: ${err?.message}`,
+      )
+      if (cur?.state === 'armed') {
+        cur.state = 'fired'
+        cur.notifiedAt = Date.now()
+        const s = loadStore()
+        s[game][uid].updatedAt = Date.now()
+        saveStore(s)
+      }
+    }
+    return
+  }
+
+  // 发送成功才落盘（重读一次，避免覆盖这期间其它字段的更新）
+  const done = loadStore()?.[game]?.[uid]?.[type]
+  if (done?.state === 'armed') {
+    done.state = 'fired'
+    done.notifiedAt = Date.now()
+    const s = loadStore()
+    s[game][uid].updatedAt = Date.now()
+    saveStore(s)
   }
 }
 
@@ -247,6 +308,16 @@ export function recordResinTimer(game, uid, data) {
   if (data._ownerSid) rec.sid = String(data._ownerSid)
   if (tf) rec.transformer = mergeDeadline(rec.transformer, tf, now)
   if (hc) rec.homeCoin = mergeDeadline(rec.homeCoin, hc, now)
+  // 精简快照：到点要出提醒卡，但那时手上只有记录（不重查接口）。
+  // 只存渲染用得上的几个字段，别把整个 data（含 expeditions 等）塞进来。
+  rec.snap = {
+    uid: key,
+    current_home_coin: Number(data.current_home_coin) || 0,
+    max_home_coin: Number(data.max_home_coin) || 0,
+    transformerView: data.transformerView
+      ? { ok: !!data.transformerView.ok, text: String(data.transformerView.text || '') }
+      : null,
+  }
   rec.updatedAt = now
   saveStore(store)
 

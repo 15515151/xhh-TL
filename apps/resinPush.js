@@ -839,23 +839,51 @@ export class resinPush extends plugin {
   }
 
   /**
-   * 到期提醒：纯文本 @，不出图。
-   * 出图要重查一次数据（渲染整张体力卡），那就违背「不额外打接口」了。
+   * 到期提醒：@用户 + 一张提醒卡（横幅 + 单条）。
+   * 出图用的是记录里存下来的快照（见 resinTimer 的 dueAt 记录），不重查接口。
+   *
+   * ⚠️ 全部目标都失败时必须把错误抛出去，让 resinTimer.fire() 重试。
+   * 典型场景是「重启补发」：scheduleTimers() 在插件构造期跑，那时适配器还没连上、
+   * Bot 还是 undefined。这里若把异常吞掉，fire() 会以为发成功而落盘 fired，提醒就永久丢了。
    */
-  async sendReminder({ uid, type, targets }) {
+  async sendReminder({ uid, type, targets, item }) {
     const text =
       type === 'homeCoin'
-        ? `你的洞天宝钱已经满啦（UID ${uid}），快去洞天里取一下吧~`
-        : `你的参量质变仪已经可以再次使用啦（UID ${uid}），记得用掉~`
+        ? '你的洞天宝钱已经满啦，快去洞天里取一下吧~'
+        : '你的参量质变仪已经可以再次使用啦，记得用掉~'
+    let ok = 0
+    let lastErr = null
     for (const t of targets) {
       try {
+        // Bot 是宿主注入的全局量，适配器连上之前不存在 —— 给个明确的错，别抛 TypeError
+        if (typeof Bot === 'undefined' || !Bot?.pickGroup) throw new Error('适配器尚未连接')
         const group = Bot.pickGroup(Number(t.group))
-        await group.sendMsg([segment.at(Number(t.qq)), ` ${text}`])
-        logger?.mark?.(`[xhh-TL][到期提醒] 已提醒 ${type} uid=${uid} → ${t.qq}@群${t.group}`)
+        const fakeE = this.makeFakeE(t.qq, t.group)
+        let imgSeg = null
+        try {
+          imgSeg = await new TL().renderRemindCard(fakeE, {
+            type,
+            item,
+            displayInfo: { qq: t.qq, qqname: String(t.qq) },
+          })
+        } catch (err) {
+          logger?.error?.(`[xhh-TL][到期提醒] 出图失败 ${type}: ${err.message}`)
+        }
+        // 顺序：@ → 图 → 文案。文案固定放图下面（主人明确要求，别再放上面）。
+        // 文案前不加换行：图片是独立块，QQ 自己就会换行，再加 \n 会多空出一行。
+        const segs = [segment.at(Number(t.qq))]
+        if (imgSeg) segs.push('\n', imgSeg)
+        segs.push(text)
+        await group.sendMsg(segs)
+        ok++
+        logger?.mark?.(`[xhh-TL][到期提醒] 已提醒 ${type} uid=${uid} → ${t.qq}@群${t.group}${imgSeg ? '' : '（无图）'}`)
       } catch (err) {
+        lastErr = err
         logger?.error?.(`[xhh-TL][到期提醒] 发送失败 ${t.qq}@群${t.group}: ${err.message}`)
       }
     }
+    // 一个都没发出去 → 抛给 fire() 重试（别让提醒静默消失）
+    if (!ok && lastErr) throw lastErr
   }
 
   /** 「体力推送列表」里附一行到期提醒状态；没记录/无 uid 时返回空串 */

@@ -15,6 +15,7 @@ import LiteMysApi from '../utils/mysClient.js';
 import { captchaTip } from '../utils/captchaTip.js';
 import { getWavesStaminaList, isWavesTlEnabled, listWavesAccounts } from '../utils/wavesData.js';
 import { recordResinTimer } from '../utils/resinTimer.js';
+import { roundCorners } from '../utils/renderImage.js';
 
 // ============ 用户 UID 显示设置 ============
 async function getShowUid(qq) {
@@ -1443,6 +1444,61 @@ export class TL extends plugin {
       reply: false,
     });
     return image ? segment.image(image) : null;
+  }
+
+  /**
+   * 到期提醒卡（质变仪 / 洞天宝钱）：顶部立绘横幅 + 单条状态，样式与 widget 卡同源。
+   * @param {object} info { type:'transformer'|'homeCoin', item, displayInfo, uid }
+   */
+  async renderRemindCard(e, info = {}) {
+    const { type, item, displayInfo = {} } = info;
+    const portrait = pickCharacterPortrait('gs');
+    const showUid = await getShowUid(displayInfo.qq);
+    const uid = showUid ? item?.uid || '' : '****';
+
+    let d;
+    if (type === 'homeCoin') {
+      const cur = Number(item?.current_home_coin) || 0;
+      const max = Number(item?.max_home_coin) || 0;
+      d = {
+        game: 'gs',
+        uid,
+        icon: '洞天宝钱.png',
+        name: '洞天宝钱',
+        bar: { cur, max, pct: max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0, warn: max > 0 && cur >= max },
+      };
+    } else {
+      const view = item?.transformerView || formatTransformer(item?.transformer);
+      d = {
+        game: 'gs',
+        uid,
+        icon: '参量质变仪.png',
+        name: '参量质变仪',
+        ok: !!view?.ok,
+        text: view?.text || '今日可使用',
+      };
+    }
+
+    // 立绘内联为 data URI：CSS background-image 加载 file:// 不阻塞截图，
+    // 偶发会截到尚未解码的一帧（渐变底色露出）；内联后像素随 HTML 到位。
+    if (portrait) d.portrait = await toDataUrlTrim(portrait);
+
+    const image = await renderTpl(e, {
+      tpl: 'Tl/Remind',
+      plugin: '小火花',
+      tplFile: pluginDir + '/resources/Tl/Remind.html',
+      ppath: '../../../../../plugins/xhh-TL/resources/',
+      data: { d, qq: displayInfo.qq, qqname: displayInfo.qqname },
+      baseScale: 1.4,
+      rem: true,
+      saveId: `Remind_${type}`,
+      reply: false,
+    });
+    if (!image) return null;
+    // 圆角外裁成透明：渲染器截图不支持透明底，body 填色又会吃掉底部圆角，
+    // 所以在插件侧用 sharp 裁（见 renderImage.roundCorners）。
+    const rounded = await roundCorners(image);
+    return segment.image(rounded);
   }
 
   async hideUidIfNeeded(data, qq) {

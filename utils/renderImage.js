@@ -46,6 +46,43 @@ async function getSharp() {
 }
 
 /**
+ * 把图片四角切成圆角、圆角外透明（出图模板的卡片要「透出群背景」时用）。
+ *
+ * 为什么不用 CSS + 渲染器：Yunzai 的渲染器截图不支持 omitBackground，
+ * body 透明也会被截成白底或黑底；把 body 填成卡片同色又会「吃掉」底部圆角
+ * （圆角外跟卡片一个颜色，看起来就是直角）。所以出图后在插件侧用 sharp 裁。
+ *
+ * 半径按图片宽度等比换算（模板按 620rem 宽设计，圆角 34rem）。
+ * sharp 缺失或出错就原样返回，不影响出图。
+ */
+export async function roundCorners(buffer, { radius = 34, baseWidth = 620 } = {}) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return buffer
+  const sharp = await getSharp()
+  if (!sharp) return buffer
+  try {
+    const img = sharp(buffer)
+    const meta = await img.metadata()
+    const w = meta.width || 0
+    const h = meta.height || 0
+    if (!w || !h) return buffer
+    const r = Math.max(0, Math.round((radius / baseWidth) * w))
+    if (r <= 0) return buffer
+    // 用 alpha 通道做遮罩：白底 + 黑色圆角矩形，取 alpha 与原图相乘
+    const mask = Buffer.from(
+      `<svg width="${w}" height="${h}"><rect x="0" y="0" width="${w}" height="${h}" rx="${r}" ry="${r}" fill="#fff"/></svg>`,
+    )
+    return await img
+      .ensureAlpha()
+      .composite([{ input: mask, blend: 'dest-in' }])
+      .png()
+      .toBuffer()
+  } catch (err) {
+    logger?.debug?.(`[xhh-TL][出图] 圆角裁切失败，用原图：${err.message}`)
+    return buffer
+  }
+}
+
+/**
  * 把渲染器出的无损 png 压成 webp。
  *
  * 让渲染器直接出 jpeg 的话用的是 Chromium 内置编码器，同画质比 webp 大不少；
