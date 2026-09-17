@@ -106,7 +106,9 @@ function savePoolCache(uid, type, cards, pity) {
   const prev = all[key][String(type)] || {}
   all[key][String(type)] = {
     at: Date.now(),
-    cards: cards || prev.cards || [],
+    // ⚠️ 不能写 `cards || prev.cards`：空数组是 truthy，接口失败时传进来的 `[]`
+    // 会盖掉上次成功拿到的卡池卡，出图里「跃迁次数统计」整块消失且不会自愈。
+    cards: Array.isArray(cards) && cards.length ? cards : (prev.cards || []),
     // 接口给的当前垫抽。本地记录里的四星三星是缺的，出图时靠它兜底
     pity: pity === undefined ? prev.pity || 0 : Number(pity) || 0,
   }
@@ -264,14 +266,51 @@ function logFile(userId, uid, type) {
   return path.join(SR_JSON_DIR, String(userId), String(uid), `${type}.json`)
 }
 
+/**
+ * 读本地记录。
+ *
+ * ⚠️ 文件存在但解析失败时**抛错**，绝不返回空数组。
+ * writeLocal 是裸 writeFileSync（非原子），进程被 kill（pm2 restart / OOM）落在写入中途
+ * 就留半个文件。若把这种损坏当成「空库」返回，调用方 mergePool 随后会写回「只含本轮新增」
+ * 的数组 —— 几百条抽卡记录无声消失，且不可逆（实测：300 条的文件截断一半后跑一次更新，
+ * 记录剩 0 条）。抛错能让本次更新中止、保住原文件，用户重试即可。
+ */
 function readLocal(userId, uid, type) {
   const file = logFile(userId, uid, type)
   if (!fs.existsSync(file)) return []
+  let raw
   try {
-    const arr = JSON.parse(fs.readFileSync(file, 'utf8'))
-    return Array.isArray(arr) ? arr : []
+    raw = fs.readFileSync(file, 'utf8')
   } catch (err) {
-    logger?.error?.(`[xhh-TL][抽卡记录] 读取 ${file} 失败：${err.message}`)
+    throw new Error(`读取抽卡记录失败：${err.message}`)
+  }
+  // 空文件当成空库（可能是上次写到一半崩了，但没有内容可丢）
+  if (!raw.trim()) return []
+  let arr
+  try {
+    arr = JSON.parse(raw)
+  } catch (err) {
+    logger?.error?.(`[xhh-TL][抽卡记录] ${file} 解析失败（本次更新中止，原文件保留）：${err.message}`)
+    throw new Error('抽卡记录文件损坏，请稍后重试')
+  }
+  return Array.isArray(arr) ? arr : []
+}
+
+/**
+ * 写本地记录：先写同目录的 .tmp 再 rename 原子替换。
+ * 直接 writeFileSync 目标文件的话，写到一半被 kill 就会留下半个 JSON
+ * （正是上面 readLocal 要防的那种损坏）。
+ */
+/**
+ * 读本地记录（展示用，损坏时降级成空）。
+ * 出图是只读路径，不该因为某个池的文件坏了就整张图出不来；但也不能把损坏当「空库」
+ * 交给写入路径（那会覆盖掉原文件）。所以这里单独包一层，只给 buildViewData / buildAllViewData 用。
+ */
+function readLocalForView(userId, uid, type) {
+  try {
+    return readLocal(userId, uid, type)
+  } catch (err) {
+    logger?.error?.(`[xhh-TL][抽卡记录] ${type} 池读取失败，本次出图跳过该池：${err?.message}`)
     return []
   }
 }
@@ -279,7 +318,10 @@ function readLocal(userId, uid, type) {
 function writeLocal(userId, uid, type, list) {
   const dir = path.join(SR_JSON_DIR, String(userId), String(uid))
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(logFile(userId, uid, type), JSON.stringify(list, '', '\t'))
+  const file = logFile(userId, uid, type)
+  const tmp = `${file}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(list, '', '\t'))
+  fs.renameSync(tmp, file)
 }
 
 function toRecord(uid, type, node, gachaId) {
@@ -350,6 +392,24 @@ function buildPlaceholders(uid, type, highId, lowId, count, usedIds, time, gacha
 const dupKey = (itemId, id) => `${itemId}@${String(id).slice(0, 10)}`
 
 /**
+ * 判重备用键：item_id + 「10 分钟桶」。
+ *
+ * Excel/csv 导入的记录没有 id，本地按真实抽卡时刻造伪 id（见 assignIds），
+ * 而接口给的是 **10 分钟对齐的批次水位** —— 两者前 10 位天然对不上，
+ * dupKey 匹配不到，于是同一发五星会被重复入账（五星数虚增、平均抽数腰斩）。
+ *
+ * 把秒前缀向下取整到 600 秒后两边就落在同一桶里了。桶粒度取 10 分钟是因为
+ * 接口水位本身就是 10 分钟对齐的；同桶内再靠 item_id 区分，不会误判。
+ */
+const dupKeyBucket = (itemId, id) => {
+  const s = String(id)
+  if (s.length < 10) return ''
+  const sec = Number(s.slice(0, 10))
+  if (!Number.isFinite(sec) || sec <= 0) return ''
+  return `${itemId}@${Math.floor(sec / 600)}`
+}
+
+/**
  * 把接口拿到的五星 + 垫抽并进本地某个池的记录。
  * 真实记录只增不删；占位每次重建，所以重复执行不会累加。
  */
@@ -376,13 +436,19 @@ function mergePool(userId, uid, type, remote, poolStat) {
   // 最旧那条五星：它之前的记录本来就不在本地（authkey 只给最近 6 个月），拿剩下的记录数兜底
   if (prevFive) localGap.set(prevFive, seen)
 
-  // 本地五星按判重键分桶，接口里的同键记录逐个抵扣
+  // 本地五星按判重键分桶，接口里的同键记录逐个抵扣。
+  // 同时挂 dupKey（精确）与 dupKeyBucket（10 分钟桶兜底）两个桶，
+  // 后者专治 Excel 导入的伪 id 与接口批次水位对不上的情况。
   const buckets = new Map()
+  const bucketOf = (k) => {
+    if (!buckets.has(k)) buckets.set(k, [])
+    return buckets.get(k)
+  }
   for (const r of real) {
     if (String(r.rank_type) !== '5') continue
-    const k = dupKey(r.item_id, r.id)
-    if (!buckets.has(k)) buckets.set(k, [])
-    buckets.get(k).push(r)
+    bucketOf(dupKey(r.item_id, r.id)).push(r)
+    const bk = dupKeyBucket(r.item_id, r.id)
+    if (bk) bucketOf(bk).push(r)
   }
 
   const stars = remote.list
@@ -424,13 +490,28 @@ function mergePool(userId, uid, type, remote, poolStat) {
   }
 
   // 先把接口五星逐条对上本地记录，拿到每条在本地的锚点 id；
-  // 占位要在第二轮才补——补某条五星的占位得先知道更旧那条落在本地哪个 id 上
-  const anchors = stars.map(s => {
-    const hit = buckets.get(dupKey(s.item.item_id, s.id))?.shift()
+  // 占位要在第二轮才补——补某条五星的占位得先知道更旧那条落在本地哪个 id 上。
+  //
+  // 匹配两轮：先精确 dupKey，再 10 分钟桶兜底（Excel 伪 id 走这条）。
+  // ⚠️ 同一条本地记录同时挂在两个桶里，所以要用 claimed 防重复认领 ——
+  // 否则一条本地记录会被两条接口记录各认领一次，另一条就变成「新增」重复入账。
+  const claimed = new Set()
+  const takeFrom = (key) => {
+    const arr = buckets.get(key)
+    if (!arr) return null
+    while (arr.length) {
+      const hit = arr.shift()
+      if (!claimed.has(hit)) return hit
+    }
+    return null
+  }
+  const anchors = stars.map((s) => {
+    const hit =
+      takeFrom(dupKey(s.item.item_id, s.id)) ||
+      takeFrom(dupKeyBucket(s.item.item_id, s.id))
+    if (hit) claimed.add(hit)
     return { hit, anchorId: hit ? big(hit.id) : big(s.id) }
   })
-
-  const claimed = new Set(anchors.map(a => a.hit).filter(Boolean))
   // 每条五星最终认定的抽数，占位补齐要按它算（跟出图用的 xhh_pity 必须同一口径）
   const finalCount = new Array(stars.length)
   for (let i = 0; i < stars.length; i++) {
@@ -957,10 +1038,16 @@ function mergeImport(userId, uid, records) {
       continue
     }
 
-    const coverKeys = new Set()
+    // 顶替判据：b: key（item_id + id 前 10 位）精确，d: key（item_id + 日期）只作兜底。
+    // ⚠️ 用「计数」而不是 Set：Set 是命中即删，同日同名的两个五星（双黄、复刻连抽）
+    // 会让 mini 的两条一起被删掉，而导入的只有一条 —— 少算一个五星。
+    // 计数改成一对一消耗，来几条就顶掉几条。
+    const coverCount = new Map()
+    const bump = (k) => coverCount.set(k, (coverCount.get(k) || 0) + 1)
     for (const r of add) {
-      coverKeys.add(`b:${r.item_id}@${String(r.id).slice(0, 10)}`)
-      if (r.time) coverKeys.add(`d:${r.item_id}@${String(r.time).slice(0, 10)}`)
+      bump(`b:${r.item_id}@${String(r.id).slice(0, 10)}`)
+      // 日期级 key 只在没有精确 b: 可用时才参与兜底，避免它把同名的另一条误吞
+      if (r.time) bump(`d:${r.item_id}@${String(r.time).slice(0, 10)}`)
     }
     let dropMini = 0
     // 顶替之前先把 mini 记录上的官方抽数（xhh_pity）交给接班的真实记录：
@@ -976,12 +1063,16 @@ function mergeImport(userId, uid, records) {
     }
     const kept = localReal.filter(r => {
       if (r.xhh_src !== 'mini') return true
-      // 小程序的 id 与游戏内导出前 10 位（批次时间戳）一致，Excel 的伪 id 只能按日期对
+      // 小程序的 id 与游戏内导出前 10 位（批次时间戳）一致，Excel 的伪 id 只能按日期对。
+      // 优先精确的 b: key；只有在它已经用尽时才动日期级兜底（且同样一对一消耗）。
       const bk = `b:${r.item_id}@${String(r.id).slice(0, 10)}`
       const dk = r.time ? `d:${r.item_id}@${String(r.time).slice(0, 10)}` : ''
-      const covered = coverKeys.has(bk) || (dk && coverKeys.has(dk))
-      if (covered) {
-        const heir = addFive.get(bk) || (dk ? addFive.get(dk) : null)
+      let useKey = ''
+      if ((coverCount.get(bk) || 0) > 0) useKey = bk
+      else if (dk && (coverCount.get(dk) || 0) > 0) useKey = dk
+      if (useKey) {
+        coverCount.set(useKey, coverCount.get(useKey) - 1)
+        const heir = addFive.get(useKey)
         if (heir && r.xhh_pity && !heir.xhh_pity) heir.xhh_pity = String(r.xhh_pity)
         dropMini++
         return false
@@ -1098,7 +1189,7 @@ async function refreshPity(e, uid, type, getCookie) {
 async function buildViewData(e, uid) {
   if (!uid) return null
   const type = parsePoolType(e.msg)
-  const list = readLocal(e.user_id, uid, type)
+  const list = readLocalForView(e.user_id, uid, type)
   if (!list.length) return null
 
   await refreshPity(e, uid, type)
@@ -1171,7 +1262,7 @@ async function buildAllViewData(e, uid) {
   // 也共用一次登录：真有池要刷垫抽时才会去换凭证
   const getCookie = lazyGachaCookie(e, uid)
   for (const type of ['11', '12', '21', '22', '1', '2']) {
-    const list = readLocal(e.user_id, uid, type)
+    const list = readLocalForView(e.user_id, uid, type)
     if (!list.length) continue
     await refreshPity(e, uid, type, getCookie)
     const entry = readPoolCache()[String(uid)]?.[String(type)]
@@ -1340,7 +1431,12 @@ async function fetchAllByAuthkey(params, userId, { full = false, onPool } = {}) 
           stopId.set(
             pool,
             local
-              .filter(r => !r.xhh_src && !r.xhh_fid)
+              // ⚠️ 必须排除 xhh_ph（占位记录）。它的 id 是 `BigInt(当前秒) * 1e9`，
+              // 恒大于接口给的真实记录 id（后者是 10 分钟对齐的批次水位）——
+              // 漏排会让 floor 被顶到「上次更新的时刻」，接口第一条就 ≤ floor，
+              // 于是 reachedOld 立刻为真、一条历史逐抽都拉不进来（表现为「拉完了，没有新记录」）。
+              // 线上实测 40 个记录文件里有 19 个中招。
+              .filter(r => !r.xhh_ph && !r.xhh_src && !r.xhh_fid)
               .reduce((m, r) => (big(r.id) > m ? big(r.id) : m), 0n),
           )
         }

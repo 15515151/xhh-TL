@@ -66,10 +66,10 @@ function readSharedStrings(xml) {
   )
 }
 
-/** A1 / BC12 → 0 基列号 */
+/** A1 / BC12 → 0 基列号；无有效引用时返回 -1（调用方顺延，见 parseSheet） */
 function colIndex(ref) {
   const m = /^([A-Z]+)/.exec(ref || '')
-  if (!m) return 0
+  if (!m) return -1
   let n = 0
   for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64)
   return n - 1
@@ -79,10 +79,16 @@ function parseSheet(xml, strings) {
   const rows = []
   for (const rm of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
     const row = []
+    let next = 0
     for (const cm of rm[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attr = cm[1] || ''
       const body = cm[2] || ''
-      const idx = colIndex(/r="([A-Z]+\d+)"/.exec(attr)?.[1])
+      // ⚠️ WPS 等工具不写 r="A1" 属性，此时不能返回 0 —— 那会让整行的 cell
+      // 全落到第 0 列、互相覆盖（只剩最后一列的值），表头认不出、Excel 直接被跳过。
+      // 没有 r 就顺延到上一格之后（xlsx 的 cell 本来就是按列序排列的）。
+      const ref = colIndex(/r="([A-Z]+\d+)"/.exec(attr)?.[1])
+      const idx = ref >= 0 ? ref : next
+      next = idx + 1
       const type = /t="([^"]+)"/.exec(attr)?.[1]
       let v = ''
       if (type === 's') {

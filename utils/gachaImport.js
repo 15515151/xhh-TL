@@ -22,14 +22,48 @@ const SHEET_TYPES = [
   [/新手|departure|beginner/i, '2'],
 ]
 
+/**
+ * 表头 → 列号。**匹配顺序即优先级**（越靠前越先认领）。
+ *
+ * ⚠️ 两条纪律，改正则时务必守住：
+ * 1. 正则不能重叠到别的列上。原先 item_type 写了裸「类型」，会把「跃迁类型」一起吃掉，
+ *    于是 gacha_type 认领不到；name 写了「物品」，会把「物品ID」吃掉。
+ *    结果 item_type 变成池名 → analyse 里 `item_type === '角色'` 判定失效 →
+ *    「五星常驻」「小保底不歪」「UP花费星琼」全部失真。
+ * 2. 一列只能被一个 key 认领（见下面 fillCols），否则先认领的把后面的挤掉。
+ */
 const COL_MATCHERS = {
-  time: /时间|日期|time|date/i,
-  name: /名称|物品|道具|name|item$/i,
-  item_type: /类别|类型|item.?type/i,
-  rank_type: /星级|品质|稀有|rank|rarity|star/i,
-  gacha_type: /跃迁类型|祈愿类型|卡池类型|卡池|gacha.?type|pool/i,
-  id: /^id$|记录\s*id|record.?id/i,
+  // 精确的先来：物品ID 必须排在 name 之前，否则会被 name 的「物品」抢走
   item_id: /物品\s*id|item.?id/i,
+  id: /^id$|记录\s*id|record.?id/i,
+  // 池类型：「跃迁/祈愿/卡池类型」要排在 item_type 之前
+  gacha_type: /跃迁类型|祈愿类型|卡池类型|卡池|gacha.?type|pool/i,
+  // 类别只认「类别 / 物品类型」，不写裸「类型」——那会吃掉「跃迁类型」
+  item_type: /类别|物品类型|item.?type/i,
+  rank_type: /星级|品质|稀有|rank|rarity|star/i,
+  time: /时间|日期|time|date/i,
+  // 名称只认「名称 / 道具名」，不写裸「物品」——那会吃掉「物品ID」
+  name: /名称|道具名|name$/i,
+}
+
+/**
+ * 按 COL_MATCHERS 的顺序给表头列认领 key，**一列只归一个 key**。
+ * 每格逐个 key 试（而不是每 key 扫全部格），先匹配到的 key 先占，占过的列后面不再分。
+ */
+function fillCols(headerCells) {
+  const cols = {}
+  const taken = new Set()
+  for (const [key, re] of Object.entries(COL_MATCHERS)) {
+    headerCells.forEach((cell, i) => {
+      if (cols[key] !== undefined || taken.has(i)) return
+      const text = String(cell || '').trim()
+      if (text && re.test(text)) {
+        cols[key] = i
+        taken.add(i)
+      }
+    })
+  }
+  return cols
 }
 
 const RANK_WORDS = { 三: '3', 四: '4', 五: '5' }
@@ -173,14 +207,7 @@ function parseExcel(buf) {
     )
     if (headRow < 0) continue
 
-    const cols = {}
-    sheet.rows[headRow].forEach((cell, i) => {
-      const text = String(cell || '').trim()
-      if (!text) return
-      for (const [key, re] of Object.entries(COL_MATCHERS)) {
-        if (cols[key] === undefined && re.test(text)) cols[key] = i
-      }
-    })
+    const cols = fillCols(sheet.rows[headRow])
     if (cols.name === undefined && cols.item_id === undefined) continue
 
     let n = 0
@@ -262,14 +289,7 @@ function parseCsv(text) {
   )
   if (headRow < 0) throw new Error('csv 里没找到表头（需要「时间」或「名称」列）')
 
-  const cols = {}
-  rows[headRow].forEach((cell, i) => {
-    const t = String(cell || '').trim()
-    if (!t) return
-    for (const [key, re] of Object.entries(COL_MATCHERS)) {
-      if (cols[key] === undefined && re.test(t)) cols[key] = i
-    }
-  })
+  const cols = fillCols(rows[headRow])
   if (cols.gacha_type === undefined) {
     throw new Error('csv 里没有「跃迁类型」列，认不出记录属于哪个卡池')
   }
