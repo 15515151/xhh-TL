@@ -31,6 +31,15 @@ const log = {
 /** 米游社风控码：撞到这些基本就是要过码 */
 const CAPTCHA_RC = [1034, 5003, 10035, 10041]
 
+/**
+ * 过码成功后原请求的自动重试梯度（毫秒，相对上一次尝试）：
+ * 第一个 0 = 立刻重打一次，之后逐步拉长等米游社放行。
+ * 总窗口 21 秒 —— 再长用户就要对着群干等，不如回退成一句「重发本条即可」。
+ */
+const RETRY_GAPS = [0, 6000, 15000]
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 /** 旧提示的正文特征。范围收得很窄，只吞这一条，避免误伤正常回复 */
 const LEGACY_NOTICE_RE = /米游社查询遇到验证码/
 
@@ -100,18 +109,25 @@ export class captchaNotice extends plugin {
       const ok = await solveByLocalService({ cookie, autoVerifyAddr: autoAddr })
       if (!ok) return this.noticeOnly(e, uid, game)
 
-      log.mark(`[xhh-TL][撞码] uid=${uid} 过码成功，重试原请求`)
-      // 用原参数重打一次；MysApi.getData 内部有缓存，过码后需要绕过，
-      // 所以这里带 Getfp 标记之外再换个 cache 场景：直接重试即可（风控码本就不缓存）
-      const retry = await args.mysApi.getData(args.type, args.data || {})
-      if (retry && Number(retry.retcode) === 0) {
-        log.mark(`[xhh-TL][撞码] uid=${uid} 重试成功`)
-        suppressLegacyNotice(e)
-        return retry
+      log.mark(`[xhh-TL][撞码] uid=${uid} 过码成功，自动重试原请求`)
+      // 过码是生效的，但米游社那边放行有延迟：实测过码完 0.3 秒就重打仍是 1034，
+      // 过一会儿再打就是 0。所以这里按梯度自己等、自己重打，
+      // 把「重发一次」这件事留在后台，不推给用户。
+      // 用原参数重打即可：风控码不缓存，getData 每次都会真打接口。
+      let retry = null
+      for (let i = 0; i < RETRY_GAPS.length; i++) {
+        if (RETRY_GAPS[i]) await sleep(RETRY_GAPS[i])
+        retry = await args.mysApi.getData(args.type, args.data || {})
+        if (retry && Number(retry.retcode) === 0) {
+          log.mark(
+            `[xhh-TL][撞码] uid=${uid} 第 ${i + 1} 次重试成功（累计等 ${RETRY_GAPS.slice(0, i + 1).reduce((a, b) => a + b, 0)}ms）`,
+          )
+          suppressLegacyNotice(e)
+          return retry
+        }
+        log.mark(`[xhh-TL][撞码] uid=${uid} 第 ${i + 1} 次重试仍失败: retcode=${retry?.retcode}`)
       }
-      log.mark(`[xhh-TL][撞码] uid=${uid} 过码后重试仍失败: retcode=${retry?.retcode}`)
-      // 过码服务已经跑过一轮：再让用户手划一次是重复劳动（过码是真生效的，
-      // 只是紧接这一枪米游社还没松口），改成让他重发本条指令
+      // 窗口内没等到放行：过码确实做了，让用户重发一次比让他去手划靠谱
       return this.blockedOnly(e, uid)
     } catch (err) {
       log.error(`[xhh-TL][撞码] 自动过码异常: ${err?.message}`)
