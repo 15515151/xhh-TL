@@ -1497,6 +1497,8 @@ export class TL extends plugin {
     if (!image) return null;
     // 圆角外裁成透明：渲染器截图不支持透明底，body 填色又会吃掉底部圆角，
     // 所以在插件侧用 sharp 裁（见 renderImage.roundCorners）。
+    // 传进来的 image 已被 renderTpl 压成 webp，roundCorners 默认也出 webp（质量同 82），
+    // 别改成 png —— 那会把压好的图重新膨胀回无损（实测大 12 倍）。
     const rounded = await roundCorners(image);
     return segment.image(rounded);
   }

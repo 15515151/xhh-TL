@@ -206,13 +206,29 @@ function arm(game, uid, type, delay, attempt = 0) {
     // 分段醒来：还没到点就续挂；状态已被改（用户用掉/关订阅）则不再管
     if (!st || st.state !== 'armed') return
     const left = st.dueAt - Date.now()
-    if (left > 1000) return arm(game, uid, type, left)
+    // 分段续挂要带上 attempt，否则重试计数被清零（质变仪最长 7 天碰不到 24.8 天阈值，纯防御）
+    if (left > 1000) return arm(game, uid, type, left, attempt)
     // fire 是 async 且内部已捕获发送错误，这里再兜一层防 unhandled rejection
     fire(game, uid, type, attempt).catch((err) =>
       log.error(`[xhh-TL][resinTimer] 提醒处理异常 ${game}/${uid}/${type}: ${err?.message}`),
     )
   }, wait)
   _timers.set(key, id)
+}
+
+/**
+ * 把一条提醒标成「已提醒」并落盘。
+ * armed/fired 的写入点统一走这里，别在别处手改 state（容易漏 updatedAt）。
+ * 注意 loadStore() 返回的是内存缓存引用，重复调用拿到的是同一份，不必反复取。
+ */
+function markFired(game, uid, type) {
+  const store = loadStore()
+  const st = store?.[game]?.[uid]?.[type]
+  if (!st) return
+  st.state = 'fired'
+  st.notifiedAt = Date.now()
+  store[game][uid].updatedAt = Date.now()
+  saveStore(store)
 }
 
 /**
@@ -236,10 +252,7 @@ async function fire(game, uid, type, attempt = 0) {
 
   // 没有订阅者：直接标 fired，不必重试（用户可能刚关掉推送）
   if (!targets.length) {
-    st.state = 'fired'
-    st.notifiedAt = Date.now()
-    store[game][uid].updatedAt = Date.now()
-    saveStore(store)
+    markFired(game, uid, type)
     return
   }
 
@@ -247,7 +260,7 @@ async function fire(game, uid, type, attempt = 0) {
     await _hooks.send?.({ game, uid, type, targets, item })
   } catch (err) {
     const n = attempt + 1
-    // 重试前重新读盘：这期间记录可能已被新一轮查询改写（用户用掉了 → 重新 armed）
+    // 重新取一次状态：这期间可能已被新一轮查询改写（用户用掉了 → 重新 armed）
     const cur = loadStore()?.[game]?.[uid]?.[type]
     if (n <= MAX_RETRY && cur?.state === 'armed') {
       const delay = n === 1 ? RETRY_FIRST_MS : RETRY_DELAY_MS
@@ -260,26 +273,13 @@ async function fire(game, uid, type, attempt = 0) {
       log.error(
         `[xhh-TL][resinTimer] 提醒发送失败 ${game}/${uid}/${type}，放弃: ${err?.message}`,
       )
-      if (cur?.state === 'armed') {
-        cur.state = 'fired'
-        cur.notifiedAt = Date.now()
-        const s = loadStore()
-        s[game][uid].updatedAt = Date.now()
-        saveStore(s)
-      }
+      if (cur?.state === 'armed') markFired(game, uid, type)
     }
     return
   }
 
-  // 发送成功才落盘（重读一次，避免覆盖这期间其它字段的更新）
-  const done = loadStore()?.[game]?.[uid]?.[type]
-  if (done?.state === 'armed') {
-    done.state = 'fired'
-    done.notifiedAt = Date.now()
-    const s = loadStore()
-    s[game][uid].updatedAt = Date.now()
-    saveStore(s)
-  }
+  // 发送成功才落盘（先重取状态，避免覆盖这期间别的更新）
+  if (loadStore()?.[game]?.[uid]?.[type]?.state === 'armed') markFired(game, uid, type)
 }
 
 // ============ 对外 API ============

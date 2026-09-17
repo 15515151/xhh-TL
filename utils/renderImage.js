@@ -54,8 +54,14 @@ async function getSharp() {
  *
  * 半径按图片宽度等比换算（模板按 620rem 宽设计，圆角 34rem）。
  * sharp 缺失或出错就原样返回，不影响出图。
+ *
+ * ⚠️ 输出格式必须跟 renderTpl 的 webpQuality 对齐，默认也出 webp。
+ * 这里若图省事写 .png()，会把上游 toWebp 刚压好的图**重新膨胀回无损**：
+ * 实测同尺寸卡片 webp 6.7KB → png 45KB（12 倍），群里发图又慢又费流量。
+ *
+ * @param {number} quality webp 质量；传 false 则出 png（上游没压过时才用）
  */
-export async function roundCorners(buffer, { radius = 34, baseWidth = 620 } = {}) {
+export async function roundCorners(buffer, { radius = 34, baseWidth = 620, quality = 82 } = {}) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) return buffer
   const sharp = await getSharp()
   if (!sharp) return buffer
@@ -71,11 +77,11 @@ export async function roundCorners(buffer, { radius = 34, baseWidth = 620 } = {}
     const mask = Buffer.from(
       `<svg width="${w}" height="${h}"><rect x="0" y="0" width="${w}" height="${h}" rx="${r}" ry="${r}" fill="#fff"/></svg>`,
     )
-    return await img
-      .ensureAlpha()
-      .composite([{ input: mask, blend: 'dest-in' }])
-      .png()
-      .toBuffer()
+    const cut = img.ensureAlpha().composite([{ input: mask, blend: 'dest-in' }])
+    // 上游是 webp，这里也出 webp；只有上游明确没压过（quality === false）才出 png
+    return quality === false
+      ? await cut.png().toBuffer()
+      : await cut.webp({ quality }).toBuffer()
   } catch (err) {
     logger?.debug?.(`[xhh-TL][出图] 圆角裁切失败，用原图：${err.message}`)
     return buffer
