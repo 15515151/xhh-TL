@@ -149,7 +149,7 @@ export function buildHelpGroups() {
         {
           icon: 'signin.webp',
           title: '#体力推送列表',
-          desc: '查看自己的体力推送订阅（含全id）',
+          desc: '查看自己的体力推送订阅（含全id、质变仪/洞天宝钱到期提醒）',
         },
         {
           icon: 'mask.webp',

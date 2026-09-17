@@ -41,6 +41,7 @@ import { createUser } from '../utils/userBind.js'
 import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
 import { listWavesAccounts, fetchWavesStamina, isWavesTlEnabled, getWavesEnvError } from '../utils/wavesData.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
+import { registerReminderHooks, scheduleTimers, refreshUidTimers, timerStats } from '../utils/resinTimer.js'
 
 const DATA_DIR = path.join(pluginDir, 'data')
 const CONFIG_FILE = path.join(DATA_DIR, 'resin_push.json')
@@ -194,6 +195,14 @@ export class resinPush extends plugin {
     } else {
       this.task = { name: '', fnc: '', cron: '' }
     }
+
+    // 参量质变仪 / 洞天宝钱到期提醒：把「发给谁、怎么发」注册给定时器模块，
+    // 并重挂上次运行（含重启前）还没到期的定时器。数据由 TL 查询时喂给该模块。
+    registerReminderHooks({
+      targets: (game, uid) => this.reminderTargets(game, uid),
+      send: (info) => this.sendReminder(info),
+    })
+    scheduleTimers()
   }
 
   // -------- 指令：设置 --------
@@ -322,9 +331,15 @@ export class resinPush extends plugin {
     subs[game][String(e.user_id)] = {
       threshold,
       group: String(e.group_id),
+      // uid 供「质变仪/洞天宝钱到期提醒」反查订阅者用（该提醒按账号定时，得知道发回哪个群）
+      uid: String(item.uid || ''),
       armed: true,
     }
     saveSubs(subs)
+    // 订阅变更 → 该账号的到期提醒定时器可能刚有主（或换了群），立刻重算一次
+    if (game === 'gs') {
+      try { refreshUidTimers('gs', item.uid) } catch (_) {}
+    }
     e.reply(
       `✅ 已开启${meta.label}体力推送\n当${meta.unit} ≥ ${threshold} 时，会在本群@你并发送体力图\n（达到后只提醒一次，回落后自动重新监控）${hadAll ? `\n（已自动关闭原${meta.label}体力全推送）` : ''}`,
       true,
@@ -412,6 +427,10 @@ export class resinPush extends plugin {
       uids,
     }
     saveSubs(subs)
+    // 订阅变更 → 重算这些账号的到期提醒定时器（全推送已存 uids，无需额外字段）
+    if (game === 'gs') {
+      try { scheduleTimers() } catch (_) {}
+    }
     e.reply(
       `✅ 已开启${meta.label}体力全推送（共 ${validUids.length} 个 UID）\n任一 UID 的${meta.unit} ≥ ${threshold} 时，会在本群@你并发送该 UID 的体力图\n（每个 UID 达到后各提醒一次，回落后自动重新监控）${hadMain ? `\n（已自动关闭原${meta.label}体力推送）` : ''}`,
       true,
@@ -459,6 +478,10 @@ export class resinPush extends plugin {
     if (subs[game][qq]) {
       delete subs[game][qq]
       saveSubs(subs)
+      // 关订阅后该账号可能已无人订阅 → 重算，清掉空转的到期提醒定时器
+      if (game === 'gs') {
+        try { scheduleTimers() } catch (_) {}
+      }
       e.reply(`已关闭${meta.label}体力推送`, quoteEnabled())
     } else {
       e.reply(`你还没有开启${meta.label}体力推送`, quoteEnabled())
@@ -474,6 +497,9 @@ export class resinPush extends plugin {
     if (subs[key][qq]) {
       delete subs[key][qq]
       saveSubs(subs)
+      if (game === 'gs') {
+        try { scheduleTimers() } catch (_) {}
+      }
       e.reply(`已关闭${meta.label}体力全推送`, quoteEnabled())
     } else {
       e.reply(`你还没有开启${meta.label}体力全推送`, quoteEnabled())
@@ -529,6 +555,11 @@ export class resinPush extends plugin {
         lines.push(
           `· ${meta.label}：${meta.unit} ≥ ${sub.threshold}（群 ${sub.group}）${sub.armed ? '' : ' [已提醒，待回落]'}`,
         )
+        // 原神额外展示质变仪/洞天宝钱的到期提醒状态
+        if (game === 'gs') {
+          const tip = this._timerTip(sub.uid)
+          if (tip) lines.push(`  ${tip}`)
+        }
       }
       const allSub = subs[ALL_KEY(game)][qq]
       if (allSub) {
@@ -555,6 +586,8 @@ export class resinPush extends plugin {
     // 避免长循环期间用户改订阅（关闭/改阈值，独立落盘）被旧快照整体覆盖。
     // 直接订阅：{ key, qq, armed }；全 id：{ key, qq, uid, armed }
     const armedChanges = []
+    // 老订阅没有 uid 字段（到期提醒反查订阅者要用），本轮拿到真实 uid 后补上
+    const uidChanges = []
     const scale = getRenderScaleStyle(cfg, 1.0)
     const tl = new TL()
 
@@ -581,6 +614,13 @@ export class resinPush extends plugin {
           const item = await this.queryItem(tl, game, { qq, groupId: sub.group })
           // 字符串一律是错误说明（'没有'/'过期'/鸣潮的接口报错），本轮跳过不动 armed
           if (!item || typeof item === 'string') continue
+
+          // 老订阅回填 uid（供到期提醒反查订阅者），拿到真实 uid 就补一次
+          const realUid = String(item.uid || '')
+          if (game === 'gs' && realUid && String(sub.uid || '') !== realUid) {
+            sub.uid = realUid
+            uidChanges.push({ game, qq, uid: realUid })
+          }
 
           const cur = meta.getCur(item)
 
@@ -658,7 +698,7 @@ export class resinPush extends plugin {
 
     // 写回前重新读盘做字段级合并：本轮长循环期间用户可能已改/删订阅（各自独立落盘），
     // 只把本轮算出的 armed 变更合并进最新文件，且跳过已被删除的 key，避免旧快照整体覆写丢更新
-    if (armedChanges.length) {
+    if (armedChanges.length || uidChanges.length) {
       const latest = loadSubs()
       for (const c of armedChanges) {
         if (c.uid) {
@@ -671,7 +711,18 @@ export class resinPush extends plugin {
           if (node) node.armed = c.armed
         }
       }
+      // 老订阅回填 uid（同上，只补字段，不动其他）
+      for (const c of uidChanges) {
+        const node = latest[c.game]?.[c.qq]
+        if (node) node.uid = c.uid
+      }
       saveSubs(latest)
+    }
+
+    // 每轮收尾重算到期提醒定时器：兜住「刚打开总开关」「老订阅刚回填 uid」
+    // 「用户刚订阅」等情况，最迟 10 分钟内自动跟上
+    try { scheduleTimers() } catch (err) {
+      logger?.debug?.(`[xhh-TL][到期提醒] 重算定时器失败: ${err?.message}`)
     }
   }
 
@@ -757,6 +808,74 @@ export class resinPush extends plugin {
       logger?.error?.(`[xhh-TL][体力推送] 发送失败 ${qq}@群${sub.group}: ${err.message}`)
       return false
     }
+  }
+
+  // -------- 参量质变仪 / 洞天宝钱到期提醒 --------
+
+  /**
+   * 反查：这个真实账号（uid）有哪些人订阅了体力推送。
+   * 同步纯读盘 —— 定时器到点时要立刻拿到，不能 await。
+   * 同时覆盖「主号推送」（sub.uid 匹配）与「全推送」（sub.uids 里有该 uid）。
+   * @returns {Array<{qq:string, group:string}>}
+   */
+  reminderTargets(game, uid) {
+    if (game !== 'gs') return []
+    const u = String(uid || '')
+    if (!u) return []
+    const subs = loadSubs()
+    const out = []
+    for (const qq of Object.keys(subs.gs)) {
+      const sub = subs.gs[qq]
+      if (!sub?.group) continue
+      if (String(sub.uid || '') !== u) continue
+      out.push({ qq, group: sub.group })
+    }
+    for (const qq of Object.keys(subs.gs_all)) {
+      const sub = subs.gs_all[qq]
+      if (!sub?.group || !sub.uids?.[u]) continue
+      out.push({ qq, group: sub.group })
+    }
+    return out
+  }
+
+  /**
+   * 到期提醒：纯文本 @，不出图。
+   * 出图要重查一次数据（渲染整张体力卡），那就违背「不额外打接口」了。
+   */
+  async sendReminder({ uid, type, targets }) {
+    const text =
+      type === 'homeCoin'
+        ? `你的洞天宝钱已经满啦（UID ${uid}），快去洞天里取一下吧~`
+        : `你的参量质变仪已经可以再次使用啦（UID ${uid}），记得用掉~`
+    for (const t of targets) {
+      try {
+        const group = Bot.pickGroup(Number(t.group))
+        await group.sendMsg([segment.at(Number(t.qq)), ` ${text}`])
+        logger?.mark?.(`[xhh-TL][到期提醒] 已提醒 ${type} uid=${uid} → ${t.qq}@群${t.group}`)
+      } catch (err) {
+        logger?.error?.(`[xhh-TL][到期提醒] 发送失败 ${t.qq}@群${t.group}: ${err.message}`)
+      }
+    }
+  }
+
+  /** 「体力推送列表」里附一行到期提醒状态；没记录/无 uid 时返回空串 */
+  _timerTip(uid) {
+    if (!uid) return ''
+    let stats = null
+    try { stats = timerStats('gs', uid) } catch (_) { return '' }
+    if (!stats) return ''
+    const fmt = (st) => {
+      if (!st) return null
+      if (st.state === 'fired') return '已提醒'
+      if (!st.dueAt || st.dueAt <= Date.now()) return '即将提醒'
+      return new Date(st.dueAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    }
+    const parts = []
+    const tf = fmt(stats.transformer)
+    const hc = fmt(stats.homeCoin)
+    if (tf) parts.push(`质变仪 ${tf}`)
+    if (hc) parts.push(`洞天宝钱 ${hc}`)
+    return parts.length ? `⏰ ${parts.join(' / ')}` : ''
   }
 
   /** 构造一个带 runtime、reply 无副作用的假事件，供 TL 查询/渲染复用 */

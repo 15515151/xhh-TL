@@ -481,6 +481,17 @@ export function supportGuoba() {
         },
         {
           component: 'Divider',
+          label: '质变仪 / 洞天宝钱到期提醒'
+        },
+        {
+          field: 'resin_timer_enable',
+          label: '启用到期提醒',
+          bottomHelpMessage:
+            '向已开启体力推送的人，在「参量质变仪可再次使用」「洞天宝钱已满」时于其订阅群 @ 提醒一次（纯文字）。数据来自用户查询体力时的快照，需至少查询过一次；到点时刻会落盘，重启后自动恢复定时',
+          component: 'Switch'
+        },
+        {
+          component: 'Divider',
           label: '米游社自动签到'
         },
         {

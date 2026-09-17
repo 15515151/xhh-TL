@@ -14,6 +14,7 @@ import { prepareMysContext, resolveAuth } from '../utils/runtimePatch.js';
 import LiteMysApi from '../utils/mysClient.js';
 import { captchaTip } from '../utils/captchaTip.js';
 import { getWavesStaminaList, isWavesTlEnabled, listWavesAccounts } from '../utils/wavesData.js';
+import { recordResinTimer } from '../utils/resinTimer.js';
 
 // ============ 用户 UID 显示设置 ============
 async function getShowUid(qq) {
@@ -1712,6 +1713,13 @@ export class TL extends plugin {
                   data.transformer = noteRes.data.transformer;
                   view = formatTransformer(data.transformer);
                   if (view) redisSetEx(`xhh:transformer_view:${stuid}`, JSON.stringify(view), 1800).catch(() => {});
+                  // 洞天宝钱的恢复剩余秒只在 dailyNote 里有（widget 不返回），
+                  // 同一份响应顺手取回，零额外请求 —— 否则挂不上「宝钱满了」的到期提醒。
+                  if (data.home_coin_recovery_time === undefined && noteRes.data.home_coin_recovery_time !== undefined) {
+                    data.home_coin_recovery_time = noteRes.data.home_coin_recovery_time;
+                    data.current_home_coin = noteRes.data.current_home_coin ?? data.current_home_coin;
+                    data.max_home_coin = noteRes.data.max_home_coin ?? data.max_home_coin;
+                  }
                 } else {
                   redisSetEx(`xhh:transformer_cool:${stuid}`, '1', 600).catch(() => {});
                   logger.info?.(`[xhh-TL][transformer] dailyNote 未取到: retcode=${noteRes?.retcode} ${noteRes?.message || ''}（冷却10分钟）`);
@@ -1732,6 +1740,14 @@ export class TL extends plugin {
     // 把缓存命中的结果覆盖掉 —— 表现为「第一次查有质变仪，之后 30 分钟缓存期内全没有」。
     if (game === 'gs' && !data.transformerView) {
       data.transformerView = formatTransformer(data.transformer);
+    }
+
+    // 参量质变仪 / 洞天宝钱到期提醒：把本次快照换算成绝对到期时刻交给定时器
+    // （utils/resinTimer.js），到点由 resinPush 按订阅 @ 提醒。不额外打接口，
+    // 只吃这次查询已有的数据；重启后由 scheduleTimers() 重新挂上。
+    if (game === 'gs') {
+      try { recordResinTimer(game, uid, data) }
+      catch (err) { logger.debug?.(`[xhh-TL][resinTimer] ${err?.message}`) }
     }
 
     return data;
