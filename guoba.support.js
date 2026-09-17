@@ -529,7 +529,7 @@ export function supportGuoba() {
           field: 'auto_verify_addr',
           label: '本地全自动过码地址',
           bottomHelpMessage:
-            '推荐填 http://127.0.0.1:8766/solve（由 service/geetest/start.sh 启动，pm2 托管 geetest-solver）。填上后 #过码 与撞码签到会自动解滑块，不需要用户手划；失败才回退到下面的手动链接。留空则只用手动过码',
+            '推荐填 http://127.0.0.1:8766/solve（由 service/geetest 启动，pm2 托管 geetest-solver）。填上后 #过码 与撞码签到会自动解滑块，不需要用户手划；失败才回退到下面的手动链接。留空则只用手动过码',
           component: 'Input',
           componentProps: {
             placeholder: 'http://127.0.0.1:8766/solve'

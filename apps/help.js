@@ -191,7 +191,7 @@ export function buildHelpGroups() {
         {
           icon: 'plugin.webp',
           title: '#过码部署 #过码服务状态',
-          desc: '一键装好全自动过码服务（Linux）；装完撞码自动处理，不用再管',
+          desc: '一键装好全自动过码服务；装完撞码自动处理，不用再管',
         },
       ],
     },

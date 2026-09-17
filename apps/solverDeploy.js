@@ -1,11 +1,11 @@
 /**
  * #过码部署 — 一键装好全自动过码服务
  *
- * 过码服务放在仓库的 solver 分支（依赖 xdotool/openbox/cv2，多数用户用不上，
- * 不塞进 master）。这个指令替用户把那几步做完：
+ * 过码服务放在仓库的 solver 分支（多数用户用不上，不塞进 master）。
+ * 这个指令替用户把那几步做完：
  *   拉 service/ → 建 venv 装依赖 → pm2 起服务 → 写回配置
  *
- * 只做 Linux：服务靠 X11 + 系统级鼠标指针，Windows/macOS 没有等价物。
+ * 服务是纯 HTTP 协议实现，不需要桌面环境或浏览器，Linux / Windows 都能跑。
  */
 
 import fs from 'fs'
@@ -22,11 +22,14 @@ const PM2_NAME = 'geetest-solver'
 const PORT = 8766
 
 // 服务运行必需的文件（都在 solver 分支上）。少任何一个都跑不起来：
-// gap.py 缺了每轮算不出缺口、gt.js 缺了起不了滑块题。
+// w.py 缺了生成不出 w 参数、server.py 缺了服务起不来。
 // ⚠️ 这些文件是「solver 分支跟踪、master 不跟踪」，在主工作区切分支
 //    （git checkout master）会被 git 静默删掉——而且服务进程照跑、/health 照绿，
 //    看不出异常。所以状态检查必须真去磁盘上数一遍。
-const SERVICE_FILES = ['server.mjs', 'gap.py', 'gt.js', 'start.sh']
+const SERVICE_FILES = ['server.py', 'w.py', 'start.sh', 'requirements.txt']
+
+// Python 依赖：装进服务目录的 venv，不动系统环境
+const PIP_PACKAGES = ['-r', 'requirements.txt']
 
 const log = {
   mark: (...a) => (typeof logger !== 'undefined' ? logger.mark(...a) : console.log(...a)),
@@ -85,6 +88,23 @@ function serviceDirExists() {
 }
 
 /**
+ * venv 里的 python 路径（跨平台：Linux 是 bin/、Windows 是 Scripts/）。
+ * 找不到返回空串 —— 调用方据此判断「还没建 venv」。
+ */
+function venvPython() {
+  for (const rel of [
+    ['bin', 'python'],              // Linux / macOS
+    ['Scripts', 'python.exe'],      // Windows
+  ]) {
+    const p = path.join(SERVICE_DIR, '.venv', ...rel)
+    try {
+      if (fs.existsSync(p)) return p
+    } catch (_) {}
+  }
+  return ''
+}
+
+/**
  * 本地服务文件是否落后于 solver 分支上的版本。
  *
  * 用 git 的 blob hash 比对，而不是读文件内容自己算摘要 —— 这样自动绕过换行符差异
@@ -127,7 +147,7 @@ async function findLocalSolverRef() {
   )
   if (!r.ok) return ''
   for (const ref of r.out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
-    const t = await run('git', ['rev-parse', '--verify', `${ref}:service/geetest/server.mjs`], { cwd: pluginDir })
+    const t = await run('git', ['rev-parse', '--verify', `${ref}:service/geetest/server.py`], { cwd: pluginDir })
     if (t.ok && t.out.trim()) return ref
   }
   return ''
@@ -180,19 +200,13 @@ export class solverDeploy extends plugin {
   /** 前置检查：平台 + 系统依赖。返回缺失项数组 */
   async precheck() {
     const missing = []
-    if (process.platform === 'win32') {
-      missing.push({ name: 'Windows', fix: '本服务需要 X11 桌面环境与系统级鼠标，Windows 装不了' })
-      return missing
-    }
-    for (const [cmd, pkg, args] of [
-      ['xdotool', 'xdotool', ['-h']],
-      ['Xvfb', 'xvfb', ['-help']],
-      ['openbox', 'openbox', ['--version']],
-      ['python3', 'python3-venv', ['--version']],
-    ]) {
-      if (!(await has(cmd, args))) {
-        missing.push({ name: pkg, fix: `apt install -y ${pkg}` })
-      }
+    // Windows 上 python 命令名不同（通常没有 python3）
+    const pyCmd = process.platform === 'win32' ? 'python' : 'python3'
+    if (!(await has(pyCmd, ['--version']))) {
+      missing.push({
+        name: 'Python 3.9+',
+        fix: process.platform === 'win32' ? '到 python.org 下载安装（勾选 Add to PATH）' : 'apt install -y python3 python3-venv',
+      })
     }
     if (!(await has('pm2', ['--version']))) {
       missing.push({ name: 'pm2', fix: 'npm i -g pm2' })
@@ -201,13 +215,9 @@ export class solverDeploy extends plugin {
   }
 
   async deploy(e) {
-    if (process.platform === 'win32') {
-      await e.reply('过码服务只能在 Linux 上跑（需要桌面环境），Windows 用不了~', quoteEnabled())
-      return true
-    }
-
     // 首次要装 Python 依赖（慢），之后只是检查一下（快）
     const firstTime = !fs.existsSync(path.join(SERVICE_DIR, '.venv', 'bin', 'python'))
+      && !fs.existsSync(path.join(SERVICE_DIR, '.venv', 'Scripts', 'python.exe'))
     await e.reply(
       firstTime ? '开始部署过码服务（首次要装依赖，可能要几分钟）~' : '检查过码服务中，稍等~',
       quoteEnabled(),
@@ -252,7 +262,7 @@ export class solverDeploy extends plugin {
             // checkout 会污染索引，立刻清掉，别让它跟着下次提交进 master
             if (co.ok) await run('git', ['reset', '-q', '--', 'service'], { cwd: pluginDir })
           }
-          if (!co.ok || !fs.existsSync(path.join(SERVICE_DIR, 'server.mjs'))) {
+          if (!co.ok || !fs.existsSync(path.join(SERVICE_DIR, 'server.py'))) {
             await e.reply('检出服务文件失败，请把插件目录更新到最新再试', quoteEnabled())
             return true
           }
@@ -261,36 +271,38 @@ export class solverDeploy extends plugin {
       }
     }
 
-    // ③ Python 依赖（venv 里装 cv2，不动系统环境）
-    const py = path.join(SERVICE_DIR, '.venv', 'bin', 'python')
-    if (!fs.existsSync(py)) {
-      const v = await run('python3', ['-m', 'venv', '.venv'], { cwd: SERVICE_DIR })
+    // ③ Python 依赖（装进服务目录的 venv，不动系统环境）
+    const pyCmd = process.platform === 'win32' ? 'python' : 'python3'
+    const py = venvPython()
+    if (!py) {
+      const v = await run(pyCmd, ['-m', 'venv', '.venv'], { cwd: SERVICE_DIR })
       if (!v.ok) {
         await e.reply('创建 Python 环境失败，请确认装了 python3-venv', quoteEnabled())
         return true
       }
     }
     // 依赖已在就跳过（pip install 要跑几十秒，没必要每次重来）
-    const depOk = await run(path.join('.venv', 'bin', 'python'), ['-c', 'import cv2, numpy'])
+    const vpy = venvPython()
+    if (!vpy) {
+      await e.reply('创建 Python 环境失败，请确认装了 python3-venv', quoteEnabled())
+      return true
+    }
+    const depOk = await run(vpy, ['-c', 'import bili_ticket_gt_python, Crypto, httpx'])
     if (!depOk.ok) {
-      const pip = await run(
-        path.join('.venv', 'bin', 'pip'),
-        ['install', '-q', 'opencv-python-headless', 'numpy'],
-        { cwd: SERVICE_DIR },
-      )
+      const pip = await run(vpy, ['-m', 'pip', 'install', '-q', ...PIP_PACKAGES], { cwd: SERVICE_DIR })
       if (!pip.ok) {
-        await e.reply('安装识别依赖失败，请检查网络后重试', quoteEnabled())
+        log.error('[xhh-TL][部署] 安装依赖失败:', pip.out.slice(0, 300))
+        await e.reply('安装过码依赖失败，请检查网络后重试', quoteEnabled())
         return true
       }
     }
 
     // ④ 起服务 / 重启服务。
     //
-    // 服务代码是启动时读进内存的（server.mjs、gt.js 都是），光把文件换成新的
-    // 不会生效 —— 所以只要这次动过文件，就必须重启，否则就是「改了没反应」。
+    // 服务代码是启动时读进内存的，光把文件换成新的不会生效 ——
+    // 所以只要这次动过文件，就必须重启，否则就是「改了没反应」。
     //
     // 其余情况保持原样不动：重启会打断正在进行的过码。
-    // （start.sh 会复用已存在的 Xvfb/openbox，不会重复创建。）
     const running = await isServiceAlive()
     if (refreshed && running) {
       log.mark('[xhh-TL][部署] 服务文件有更新，重启服务使其生效')
@@ -302,7 +314,7 @@ export class solverDeploy extends plugin {
       }
     } else if (!running) {
       await run('pm2', ['delete', PM2_NAME]) // 清掉残留的失败进程，避免端口占用
-      const start = await run('pm2', ['start', 'start.sh', '--name', PM2_NAME, '--interpreter', 'bash'], {
+      const start = await run('pm2', ['start', vpy, '--name', PM2_NAME, '--', 'server.py'], {
         cwd: SERVICE_DIR,
       })
       if (!start.ok) {
