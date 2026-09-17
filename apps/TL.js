@@ -1726,8 +1726,11 @@ export class TL extends plugin {
       }
     }
 
-    // 归一成展示结构，classic / portrait / widget 三模板共用（无数据时为 null，模板整行隐藏）
-    if (game === 'gs') {
+    // 归一成展示结构，classic / portrait / widget 三模板共用（无数据时为 null，模板整行隐藏）。
+    // ⚠️ 必须判 !data.transformerView 再算：上面缓存命中那条路径只产出 transformerView、
+    // 不产出 data.transformer（原始结构），这里若无条件重算会用 undefined 得出 null，
+    // 把缓存命中的结果覆盖掉 —— 表现为「第一次查有质变仪，之后 30 分钟缓存期内全没有」。
+    if (game === 'gs' && !data.transformerView) {
       data.transformerView = formatTransformer(data.transformer);
     }
 
