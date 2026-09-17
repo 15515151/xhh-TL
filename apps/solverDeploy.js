@@ -61,7 +61,11 @@ async function fetchSolver() {
   if (!remotes.length) return { ok: false, msg: '没有配置任何 git remote' }
   const tried = []
   for (const remote of remotes) {
-    const f = await run('git', ['fetch', '--depth=1', remote, 'solver'], { cwd: pluginDir })
+    // ★ 显式写 refspec：用户多是 `git clone --depth=1`（浅克隆 + 单分支），
+    //   这种仓库 `fetch <remote> solver` 只会写 FETCH_HEAD，**不会建出 <remote>/solver 引用**，
+    //   后面按引用名检出就会失败。写上 refspec 才能把引用真正建出来。
+    const refspec = `solver:refs/remotes/${remote}/solver`
+    const f = await run('git', ['fetch', '--depth=1', remote, refspec], { cwd: pluginDir })
     if (f.ok) return { ok: true, remote }
     tried.push(remote)
   }
@@ -147,7 +151,16 @@ export class solverDeploy extends plugin {
         await e.reply(`拉取服务失败：${f.msg}`, quoteEnabled())
         return true
       }
-      const co = await run('git', ['checkout', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
+      // ★ 用 restore 而不是 checkout：`checkout <ref> -- service` 会把 service 写进暂存区，
+      //   之后插件目录任何一次 commit 都会把服务代码带进 master（master 就是这么被污染的）。
+      //   restore 只写工作区、不碰索引，service 才能老老实实待在 gitignore 里。
+      //   先试引用名（fetch 已按 refspec 建出来），旧版 git 不支持 --source 就退回 checkout。
+      let co = await run('git', ['restore', '--source', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
+      if (!co.ok) {
+        co = await run('git', ['checkout', `${f.remote}/solver`, '--', 'service'], { cwd: pluginDir })
+        // checkout 会污染索引，立刻清掉，别让它跟着下次提交进 master
+        if (co.ok) await run('git', ['reset', '-q', '--', 'service'], { cwd: pluginDir })
+      }
       if (!co.ok || !fs.existsSync(path.join(SERVICE_DIR, 'server.mjs'))) {
         await e.reply('检出服务文件失败，请把插件目录更新到最新再试', quoteEnabled())
         return true
