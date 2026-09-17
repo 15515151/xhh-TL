@@ -60,11 +60,24 @@ function isActionToken(token) {
  * 规则：从左往右扫，遇到第一个动作 token 起，后面全算手法。
  */
 export function splitInput(text) {
-  const tokens = String(text || '')
+  const raw = String(text || '')
     .split(/[\s,，、。|]+/)
     .map((s) => s.trim())
     // 手打的「@昵称」不会变成 at 段而是留在正文里，别把它当角色名（真 at 走 resolveTargetQq）
     .filter((s) => s && !s.startsWith('@'))
+
+  // 帮助图承诺 `a1 3次` 可用，但它按空白切开就成了 ['a1','3次'] 两个 token，
+  // 后者会被当成看不懂的手法。这里把孤立的「N次」并回前一个 token。
+  // ⚠️ 合并时要补一个空格：直接拼接会得到 `a13次`，被 expandActionCodes 解析成
+  // 「a 重复 13 次」（非贪婪匹配先吞到 `a`），必须还原成 `a1 3次`。
+  const tokens = []
+  for (const t of raw) {
+    if (/^\d+\s*次$/.test(t) && tokens.length) {
+      tokens[tokens.length - 1] += ` ${t}`
+      continue
+    }
+    tokens.push(t)
+  }
 
   const team = []
   const combo = []

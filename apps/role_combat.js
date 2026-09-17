@@ -33,7 +33,10 @@ function indexToMonth(idx) {
 
 function parseMonth(msg = '') {
   const raw = String(msg || '');
-  let m = raw.match(/(20\d{2})(?:[-/.年]?)(0?[1-9]|1[0-2])(?:月)?/);
+  // ⚠️ 月份交替的顺序必须是「两位数在前」：`0?[1-9]|1[0-2]` 会让 `202610` 先命中 `1`
+  // （`0?` 可省），正则不会回溯去试 `10` —— 结果 10/11/12 月全被解析成 1 月。
+  // 症状很隐蔽：指令正则照样匹配，但查到的是 1 月，不在数据包里就 fallback 到最新一期。
+  let m = raw.match(/(20\d{2})(?:[-/.年]?)(1[0-2]|0?[1-9])(?:月)?/);
   if (m) return `${m[1]}${String(Number(m[2])).padStart(2, '0')}`;
   m = raw.match(/20\d{4}/);
   if (m) return m[0];

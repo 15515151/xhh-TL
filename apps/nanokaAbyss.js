@@ -827,16 +827,43 @@ function lunaLiveIndex(list) {
   return list.length - 1
 }
 
-/** 期数定位：channel=live 取当期；latest 取下一期（没有则退当期并给提示） */
+/**
+ * 期数定位：channel=live 取当期；latest 取下一期（没有则退当期并给提示）。
+ *
+ * ⚠️ 必须以**时间**定位，不能用「列表末尾 = 下期、倒数第二 = 当期」。
+ * lunaris 的 id 顺序不等于时间顺序（新期会用比旧期小的 id 补录），实测线上：
+ *   5269011  7.0  08-19 ~ 09-30  ← 进行中
+ *   5269012  7.1  08-11 ~ 09-08  ← 已结束，却排在末尾
+ * 按末尾取的话 `#下期危战` 会退到一期已经结束的期数，而且不报错。
+ * 「下期」也不能简单取 `liveIdx + 1`（下标相邻不等于时间相邻），
+ * 要按 begin 找**时间上**排在当期之后最近的那一期。
+ */
 function lunaResolveIndex(list, channel = 'live', offset = 0) {
-  // 不依赖日期：列表末尾即最新一期（下期），倒数第二期为当期
-  const lastIdx = list.length - 1
-  let baseIdx = channel === 'latest' ? lastIdx : lastIdx - 1
+  const liveIdx = lunaLiveIndex(list)
+  let baseIdx = liveIdx
   let note = ''
-  if (baseIdx < 0) {
-    baseIdx = Math.max(0, lastIdx)
-    if (channel !== 'latest') note = '仅有一期数据，已展示最新一期'
+
+  if (channel === 'latest') {
+    const liveBegin = list[liveIdx]?.begin ? moment(list[liveIdx].begin) : null
+    let nextIdx = -1
+    let nextBegin = null
+    for (let i = 0; i < list.length; i++) {
+      if (i === liveIdx) continue
+      const b = list[i]?.begin ? moment(list[i].begin) : null
+      if (!b?.isValid() || !liveBegin?.isValid() || !b.isAfter(liveBegin)) continue
+      if (!nextBegin || b.isBefore(nextBegin)) {
+        nextBegin = b
+        nextIdx = i
+      }
+    }
+    if (nextIdx >= 0) {
+      baseIdx = nextIdx
+    } else {
+      note = '还没有下一期数据，已展示当期'
+    }
   }
+
+  if (baseIdx < 0) baseIdx = Math.max(0, list.length - 1)
   const idx = Math.max(0, baseIdx - Math.max(0, offset))
   return { idx, baseIdx, offset: baseIdx - idx, total: list.length, note }
 }
@@ -1563,15 +1590,16 @@ function mapHsrTypes(arr) {
 function formatHsrChallenges(list = [], { onlyFirst = false } = {}) {
   const arr = (list || [])
     .map((c) => {
-      let name = stripColor(c.name || '')
+      // ⚠️ 顺序不能反：必须先填 param 再 stripColor。
+      // stripColor 会把 `#1[i]` 处理成 `1`（留下数字、去掉标记），先 strip 的话
+      // 下面的替换就没有占位符可替换了，所有数字都停在 1
+      //（「剩余10轮」显示成「剩余1轮」，线上 390 条目标里 262 条中招）。
+      let name = String(c.name || '')
       if (c.param != null && c.param !== '') {
         const p = String(c.param)
-        name = name
-          .replace(/#\d+\[i\]%?/gi, p)
-          .replace(/#\d+/g, p)
-          .replace(/<\/?unbreak>/gi, '')
+        name = name.replace(/#\d+\[i\]%?/gi, p).replace(/#\d+/g, p)
       }
-      return name.trim()
+      return stripColor(name)
     })
     .filter(Boolean)
   return onlyFirst ? arr.slice(0, 1) : arr.slice(0, 3)
@@ -1642,7 +1670,10 @@ function floorsFromMazeNodes(nodes, meta, resolveMon, tables = null) {
       floorLabel: withStar ? `第 ${floorNo} 层（含星启）` : n.name || `第 ${floorNo} 层`,
       name: n.name || `第 ${floorNo} 层`,
       group: n.group_name || meta.zh || meta.en,
-      desc: [stripColor(n.desc || ''), starDesc].filter(Boolean).join('\n'),
+      // ⚠️ 用 formatBuffDesc 而不是 stripColor：节点 desc 里的 `#1[i]%` / `#2[i]`
+      // 要靠 param 数组填真实值（带 % 的还会 ×100），stripColor 只去标记不填值，
+      // 结果是「伤害提高80%」显示成「伤害提高1%」（数字全错）。
+      desc: [formatBuffDesc(n.desc || '', n.param), starDesc].filter(Boolean).join('\n'),
       // 游戏内：普通 20 回合，星启 30 回合
       countdown: 20,
       starCountdown: withStar ? 30 : undefined,

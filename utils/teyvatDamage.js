@@ -384,8 +384,13 @@ function parseTalent(text) {
     return [Number(digits.slice(0, 2)), Number(digits.slice(2, 4)), Number(digits.slice(2, 4))]
   }
   if (digits) {
-    const v = Number(digits)
-    return [v, v, v]
+    // ⚠️ 必须夹到 1..15（上面三条分支都有夹取，这里原先漏了）。
+    // 5 位连写（`91010`）是歧义写法，不夹取会得出 [91010,91010,91010]，
+    // 小助手直接回「暂不支持该队伍伤害计算」—— 用户看到的是「把其中一位换成
+    // 明确的输出位再试试」，完全被误导（其实跟队伍构成无关，是天赋值非法）。
+    // 想写天赋就用 3 位（`999`）或 6 位（`101313`），别用 5 位。
+    const v = Math.min(15, Math.max(1, Number(digits)))
+    return Number.isFinite(v) ? [v, v, v] : null
   }
   return null
 }
@@ -524,8 +529,14 @@ function applyWeaponBonus(roleData, key, value, sign) {
   }
 }
 
-/** 武器等级上限（3 星及以下 70） */
-const weaponMaxLevel = (star) => (num(star) >= 4 ? 90 : 70)
+/**
+ * 武器等级上限。
+ * ⚠️ 口径跟 miao 保持一致（`miao-plugin/models/Weapon.js` 的 `get maxLv()`）：
+ * **1~2 星才封顶 70，3 星及以上都是 90**。原先写成 `star >= 4 ? 90 : 70`，
+ * 把三星武器错压到 70 级 —— 讨龙英杰谭/黑缨枪/白缨枪这些高频三星全中，
+ * 攻击力白值少算 80~92 点（白缨枪 309→401），是实打实的数值错误。
+ */
+const weaponMaxLevel = (star) => (num(star) <= 2 ? 70 : 90)
 
 /** 武器类型 → 中文（提示用，别把 catalyst 这种英文丢给用户看） */
 const WEAPON_TYPE_CN = {
