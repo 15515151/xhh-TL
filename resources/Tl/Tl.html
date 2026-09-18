@@ -92,7 +92,7 @@
               <img src="{{ppath}}Tl/imgs/洞天宝钱.png" />
               <p>洞天宝钱</p>
               <div class="right_">
-                <span class="{{$value.current_home_coin>2000 ? 'red' : 'blue'}}">{{$value.current_home_coin}}/{{$value.max_home_coin}}</span>
+                <span class="{{($value.max_home_coin>0 && $value.current_home_coin>=$value.max_home_coin) ? 'red' : 'blue'}}">{{$value.current_home_coin}}/{{$value.max_home_coin}}</span>
               </div>
             </div>
 

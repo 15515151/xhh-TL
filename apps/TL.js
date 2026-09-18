@@ -1460,26 +1460,31 @@ export class TL extends plugin {
     const showUid = await getShowUid(displayInfo.qq);
     const uid = showUid ? item?.uid || '' : '****';
 
+    // ⚠️ 提醒卡画的是记录里存的**上次查询快照**（到点不重查接口），快照必然滞后于到点那一刻：
+    // 触发条件就是「攒满 / 冷却结束」，所以到点时状态一定已经达成，别照抄快照里那个中间值 ——
+    // 否则会画出「文案说满了、图上却 2250/2400」的自相矛盾（实测踩过）。
     let d;
     if (type === 'homeCoin') {
-      const cur = Number(item?.current_home_coin) || 0;
-      const max = Number(item?.max_home_coin) || 0;
+      // max 快照里一定有（算得出 dueAt 就说明当时 max>0），兜底 2400 防脏数据
+      const max = Number(item?.max_home_coin) || 2400;
+      // 到点 = 已攒满，取满值；快照若已更满（同一周期内又查过）就用快照的
+      const cur = Math.max(Number(item?.current_home_coin) || 0, max);
       d = {
         game: 'gs',
         uid,
         icon: '洞天宝钱.png',
         name: '洞天宝钱',
-        bar: { cur, max, pct: max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0, warn: max > 0 && cur >= max },
+        bar: { cur, max, pct: max > 0 ? 100 : 0, warn: max > 0 },
       };
     } else {
-      const view = item?.transformerView || formatTransformer(item?.transformer);
+      // 同理：提醒触发时质变仪已冷却完毕，别用旧快照里的「N天后可再次使用」
       d = {
         game: 'gs',
         uid,
         icon: '参量质变仪.png',
         name: '参量质变仪',
-        ok: !!view?.ok,
-        text: view?.text || '今日可使用',
+        ok: true,
+        text: '今日可使用',
       };
     }
 

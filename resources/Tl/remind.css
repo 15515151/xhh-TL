@@ -159,6 +159,12 @@ body {
   font-weight: 700;
   color: #fff;
 }
+/* 已满：数字转亮金 + 微微发光，跟未满的白字拉开距离（进度条本身已是暖金，
+   不加这层的话满/未满看着一样，实测过） */
+.rm-val.warn {
+  color: #ffd98a;
+  text-shadow: 0 0 14rem rgba(247, 217, 154, 0.55);
+}
 .rm-val i {
   font-style: normal;
   font-size: 17rem;

@@ -32,7 +32,7 @@
           <div class="rm-icon" style="background-image: url({{ppath}}Tl/imgs/{{d.icon}})"></div>
           <div class="rm-name">{{d.name}}</div>
           {{if d.bar}}
-          <div class="rm-val">{{d.bar.cur}}<i>/{{d.bar.max}}</i></div>
+          <div class="rm-val {{d.bar.warn ? 'warn' : ''}}">{{d.bar.cur}}<i>/{{d.bar.max}}</i></div>
           {{else}}
           <div class="rm-sub {{d.ok ? 'ready' : ''}}">{{d.text}}</div>
           {{/if}}
