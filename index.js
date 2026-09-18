@@ -1,4 +1,5 @@
 // 插件入口：Yunzai 有 index.js 时只加载本文件导出，不会自动扫 apps/*
+import './utils/ckAutoRefresh.js' // ck 失效全局自愈：加载即对 genshin checkCode 打补丁
 import { TL } from './apps/TL.js'
 import { Abyss } from './apps/Abyss.js'
 import { role_combat } from './apps/role_combat.js'

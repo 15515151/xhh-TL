@@ -303,4 +303,21 @@ export function findStokenEntry(qq, uid) {
   return null
 }
 
-export default { cookiePart, getstoken, stokenToCookie, findStokenEntry }
+/**
+ * 用 stoken 内部换一串新的完整 ck（供 ck 失效自愈复用）。
+ * 复用 findStokenEntry + stokenToCookie；只认真带 cookie_token 的结果，
+ * 换不出（无 stoken / stoken 也死 / 只拿到 stoken-only 兜底串）统一返回 ''。
+ * @returns {Promise<string>} 形如 ltoken=..;ltuid=..;cookie_token=..;account_id=..; 或 ''
+ */
+export async function refreshCk(qq, uid) {
+  try {
+    const entry = findStokenEntry(qq, uid)
+    if (!entry) return ''
+    const ck = await stokenToCookie(entry)
+    return ck && /cookie_token=/.test(ck) ? ck : ''
+  } catch (_) {
+    return ''
+  }
+}
+
+export default { cookiePart, getstoken, stokenToCookie, findStokenEntry, refreshCk }
