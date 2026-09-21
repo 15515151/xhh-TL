@@ -139,13 +139,27 @@ function pickUserCookie(user, uid, { allow = () => true, allowAny = false } = {}
   )
   if (!entries.length) return ''
 
-  const owned = entries.filter(([, mys]) => {
-    const uids = [].concat(mys.uids?.gs || [], mys.uids?.sr || [], mys.uids?.zzz || []).map(String)
-    return !uids.length || uids.includes(String(uid))
-  })
+  const uidStr = String(uid)
+  const gameUids = (mys) =>
+    [].concat(mys.uids?.gs || [], mys.uids?.sr || [], mys.uids?.zzz || []).map(String)
+  const hasOwnerInfo = (mys) => gameUids(mys).length > 0
 
-  let usable = owned
-  if (!usable.length && (allowAny || entries.length === 1)) usable = entries
+  // 精确属主命中优先：只有账号 uids 里明确列了该 uid 才认为它属于这个米游社账号。
+  let usable = entries.filter(([, mys]) => gameUids(mys).includes(uidStr))
+
+  // 没有精确命中时，只有「归属未知」的账号才允许兜底：
+  // - allowAny（纯 stoken 用户，没有 genshin 绑定体系）保持旧的放宽行为；
+  // - 否则若存在声明过归属、却都不含该 uid 的账号，说明这个 uid 不属于它们，
+  //   绝不能拿它们的凭证去查 —— 原神/星铁/绝区零的 widget 接口不带 uid、只认
+  //   stoken 所属账号，用错凭证会把该账号的体力冒充成这个 UID（多号全一样）。
+  if (!usable.length) {
+    if (allowAny) {
+      usable = entries
+    } else {
+      const anyKnownOwner = entries.some(([, mys]) => hasOwnerInfo(mys))
+      if (!anyKnownOwner) usable = entries
+    }
+  }
 
   const pick =
     usable.find(([, mys]) => /cookie_token=/.test(mys.ck || '')) ||

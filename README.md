@@ -192,6 +192,8 @@ gsuid_core + 鸣潮插件（鸣潮体力）、Node ≥ 22.5（鸣潮读库更省
 reply_quote: true           # 出图和提示是否引用你发的那条消息
 render_scale: 1.0           # 全局出图清晰度倍率（上限 2.5）
 tl_card_style: classic      # 体力卡样式 classic / portrait / widget
+tl_render_mode: merge       # 体力渲染模式 merge=合并 / single=独立（三种样式均生效）
+tl_merge_uids_per_image: 0  # 合并模式下每图 UID 数，0=全部（立绘/小组件卡并排直接出图）
 tl_cards_per_msg: 3         # 超过这个张数改用合并转发
 waves_tl_enable: false      # 鸣潮体力总开关
 waves_tl_gsuid_db: ""       # GsData.db 路径，Windows 必填

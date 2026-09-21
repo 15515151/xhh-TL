@@ -251,3 +251,12 @@ body {
   color: rgba(255,255,255,0.35);
   letter-spacing: 0.05em;
 }
+
+/* 合并渲染：多张立绘卡一行并排，body 宽度由模板按卡片数撑开 */
+.pt-row {
+  display: flex;
+  align-items: flex-start;
+}
+.pt-row > .pt-card {
+  flex: 0 0 auto;
+}
