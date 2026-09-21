@@ -352,7 +352,7 @@ body {
 }
 .room-title { font-size: 12rem; color: #8eb7ff; margin-bottom: 8rem; font-weight: 600; }
 
-.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10rem; margin-top: 8rem; }
+.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 24rem; margin-top: 8rem; }
 .hsr-sides.with-star { grid-template-columns: 1fr 1fr 1fr; }
 .star-side .side-lab { color: #ffd089; }
 .side-lab {
@@ -481,7 +481,7 @@ body {
 
     <header class="nk-head">
       <div class="nk-brand">
-        <div class="nk-kicker">NANOKA.CC · {{gameName}}</div>
+        <div class="nk-kicker">{{source}} · {{gameName}}</div>
         <h1 class="nk-title">{{modeName}}</h1>
         <p class="nk-sub">{{title}}{{if timeRange}} · {{timeRange}}{{/if}}</p>
       </div>
@@ -594,7 +594,67 @@ body {
     </section>
     {{/if}}
 
-    {{if floors}}
+    {{if arb}}
+    <section class="nk-section">
+      <div class="nk-sec-head"><span>FLOORS</span><h2>节点</h2></div>
+
+      {{each arb.bosses b}}
+      <article class="nk-card floor arb-boss">
+        <div class="floor-head">
+          <h3>{{b.label}}</h3>
+          {{if b.level}}<span class="nk-chip soft">Lv.{{b.level}}</span>{{/if}}
+        </div>
+        {{if b.tags && b.tags.length}}<p class="nk-desc">机制：{{b.tags.join(' / ')}}</p>{{/if}}
+        <div class="side">
+          <div class="side-lab">一队 / 节点一</div>
+          {{if b.elems && b.elems.length}}
+          <div class="weak-line">{{each b.elems t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}</div>
+          {{/if}}
+          <div class="mon-row">
+            {{each b.monsters m}}
+            <div class="mon">
+              {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
+              <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
+              {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+      </article>
+      {{/each}}
+
+      {{if arb.knights && arb.knights.length}}
+      <div class="arb-knights">
+        {{each arb.knights k}}
+        <article class="nk-card floor arb-knight">
+          <div class="floor-head">
+            <h3>{{k.label}}</h3>
+            {{if k.level}}<span class="nk-chip soft">Lv.{{k.level}}</span>{{/if}}
+          </div>
+          {{if k.tags && k.tags.length}}<p class="nk-desc">机制：{{k.tags.join(' / ')}}</p>{{/if}}
+          <div class="side">
+            <div class="side-lab">一队 / 节点一</div>
+            {{if k.elems && k.elems.length}}
+            <div class="weak-line">{{each k.elems t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}</div>
+            {{/if}}
+            <div class="mon-row">
+              {{each k.monsters m}}
+              <div class="mon">
+                {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
+                <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
+                {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+              </div>
+              {{/each}}
+            </div>
+          </div>
+        </article>
+        {{/each}}
+      </div>
+      {{/if}}
+    </section>
+    {{/if}}
+
+    {{if floors && !arb}}
     <section class="nk-section">
       <div class="nk-sec-head"><span>FLOORS</span><h2>{{game === 'gi' ? '楼层' : '节点'}}</h2></div>
       <div class="nk-floor-list">
@@ -616,19 +676,6 @@ body {
           {{/if}}
 
           {{if f.desc}}<p class="nk-desc">{{f.desc}}</p>{{/if}}
-
-          {{if f.hasTypes}}
-          <div class="weak-line">
-            {{if f.type1}}
-            <span class="weak-lab">上半</span>
-            {{each f.type1 t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}
-            {{/if}}
-            {{if f.type2}}
-            <span class="weak-lab">下半</span>
-            {{each f.type2 t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}
-            {{/if}}
-          </div>
-          {{/if}}
 
           {{if f.rooms}}
           <div class="room-grid">
@@ -671,16 +718,20 @@ body {
                 {{each f.type1 t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}
               </div>
               {{/if}}
-              <div class="mon-row">
-                {{each f.left m}}
-                <div class="mon">
-                  {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
-                  <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
-                  {{if m.wave}}<em>W{{m.wave}}</em>{{/if}}
-                  {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+              {{each f.leftGroups g}}
+              <div class="wave-block">
+                {{if g.no}}<span class="wave-lab">W{{g.no}}</span>{{/if}}
+                <div class="mon-row">
+                  {{each g.monsters m}}
+                  <div class="mon">
+                    {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
+                    <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
+                    {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+                  </div>
+                  {{/each}}
                 </div>
-                {{/each}}
               </div>
+              {{/each}}
             </div>
             {{if f.right && f.right.length}}
             <div class="side">
@@ -690,16 +741,20 @@ body {
                 {{each f.type2 t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}
               </div>
               {{/if}}
-              <div class="mon-row">
-                {{each f.right m}}
-                <div class="mon">
-                  {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
-                  <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
-                  {{if m.wave}}<em>W{{m.wave}}</em>{{/if}}
-                  {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+              {{each f.rightGroups g}}
+              <div class="wave-block">
+                {{if g.no}}<span class="wave-lab">W{{g.no}}</span>{{/if}}
+                <div class="mon-row">
+                  {{each g.monsters m}}
+                  <div class="mon">
+                    {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
+                    <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
+                    {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+                  </div>
+                  {{/each}}
                 </div>
-                {{/each}}
               </div>
+              {{/each}}
             </div>
             {{/if}}
             {{if f.hasStar && f.star && f.star.length}}
@@ -710,16 +765,20 @@ body {
                 {{each f.typeStar t}}<i class="elem {{t.cls}}">{{t.name}}</i>{{/each}}
               </div>
               {{/if}}
-              <div class="mon-row">
-                {{each f.star m}}
-                <div class="mon">
-                  {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
-                  <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
-                  {{if m.wave}}<em>W{{m.wave}}</em>{{/if}}
-                  {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+              {{each f.starGroups g}}
+              <div class="wave-block">
+                {{if g.no}}<span class="wave-lab">W{{g.no}}</span>{{/if}}
+                <div class="mon-row">
+                  {{each g.monsters m}}
+                  <div class="mon">
+                    {{if m.icon}}<img src="{{@m.icon}}" alt="" />{{else}}<div class="mon-ph">怪</div>{{/if}}
+                    <span>{{m.name}}{{if m.hpText}}<i class="hp">{{m.hpText}}</i>{{/if}}</span>
+                    {{if m.weak}}<em>{{m.weak.join('/')}}</em>{{/if}}
+                  </div>
+                  {{/each}}
                 </div>
-                {{/each}}
               </div>
+              {{/each}}
             </div>
             {{/if}}
           </div>

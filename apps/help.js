@@ -340,7 +340,7 @@ export function buildHelpGroups() {
     },
     {
       group: '原神 · 版本配置',
-      desc: 'Nanoka 静态 · 不查个人成绩',
+      desc: 'Alioth 静态 · 不查个人成绩',
       color: 'orange',
       list: [
         {
@@ -370,14 +370,14 @@ export function buildHelpGroups() {
         },
         {
           icon: 'sr-丹恒.webp',
-          title: '上期 / 第N期',
-          desc: '接在版本指令后：#版本深渊上期',
+          title: '上期 / 第N期 / 9月',
+          desc: '接在版本指令后：#版本深渊上期 · #版本深渊9月',
         },
       ],
     },
     {
       group: '星铁 · 版本配置',
-      desc: 'Nanoka · * / 星铁 前缀',
+      desc: 'Alioth · * / 星铁 前缀',
       color: 'pink',
       list: [
         {
@@ -470,7 +470,7 @@ export class help extends plugin {
 
       const data = {
         title: '小火花帮助',
-        subTitle: '四游戏体力 · 全部深渊 · 幻想剧诗 · Nanoka 版本配置',
+        subTitle: '四游戏体力 · 全部深渊 · 幻想剧诗 · 版本配置',
         version,
         cmdCount,
         generatedAt: moment().format('YYYY-MM-DD HH:mm'),

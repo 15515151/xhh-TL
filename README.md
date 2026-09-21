@@ -145,11 +145,14 @@ game_record 实时便笺接口，纯 stoken 凭证拉不到时该行自动隐藏
 ## 版本配置（不查个人成绩）
 
 ```
-#版本深渊 #版本剧诗 #版本危战      原神当期配置，支持「列表 / 上期 / 第N期」
+#版本深渊 #版本剧诗 #版本危战      原神当期配置，支持「列表 / 上期 / 第N期 / 9月」
 *版本混沌 *版本虚构 *版本末日 *版本异相    星铁挑战库
 ```
 
-数据来自 [Nanoka](https://nanoka.cc/) 与 [lunaris.moe](https://gi.lunaris.moe/leyline)，无需绑定。
+「当期」按网站标注的时间期限自动定位（今天落在哪期就是哪期）；
+`#下期X` 看下一期，`#版本深渊列表` 看最近期数，`#版本深渊9月` / `#版本深渊202609` 按月回看。
+
+数据来自 [Alioth.wiki](https://alioth.wiki/)，无需绑定。
 
 ## 安装
 
@@ -239,7 +242,7 @@ team_damage: true           # 队伍伤害（与 FanSky_Qs 同名指令冲突时
 > 请勿将其作为对外服务部署。如需商用，请自行替换该依赖或自行实现等价逻辑。
 
 数据接口：米游社 / HoYoLAB 官方、[库街区](https://www.kurobbs.com/)、提瓦特小助手、
-[Nanoka](https://nanoka.cc/)、[lunaris.moe](https://gi.lunaris.moe/leyline)、
+[Alioth.wiki](https://alioth.wiki/)、
 [Project Amber](https://gi.yatta.moe/) 与 [Enka.Network](https://enka.network/)（图源兜底）。
 
 ## 声明

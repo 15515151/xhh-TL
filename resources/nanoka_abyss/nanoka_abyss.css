@@ -369,7 +369,7 @@ body {
 }
 .room-title { font-size: 12rem; color: #8eb7ff; margin-bottom: 8rem; font-weight: 600; }
 
-.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10rem; margin-top: 8rem; }
+.hsr-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 24rem; margin-top: 8rem; }
 .hsr-sides.with-star { grid-template-columns: 1fr 1fr 1fr; }
 .star-side .side-lab { color: #ffd089; }
 .side-lab {
@@ -487,3 +487,49 @@ body {
   color: #5c6478;
   letter-spacing: 0.04em;
 }
+
+/* 异相仲裁：王棋两关整宽在上，骑士三宫格在下 */
+.arb-boss + .arb-boss { margin-top: 12rem; }
+.arb-knights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rem;
+  margin-top: 12rem;
+}
+.arb-knights .floor-head h3 { font-size: 14rem; }
+.arb-knights .weak-line { margin-bottom: 8rem; }
+.arb-knights .mon-row { flex-direction: column; align-items: stretch; }
+.arb-knights .mon { width: 100%; }
+
+/* 王棋是单只 boss，整宽卡片里内容居中，别全堆在左边 */
+.arb-boss .nk-desc,
+.arb-knights .nk-desc { text-align: center; }
+.arb-boss .side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.arb-boss .weak-line { justify-content: center; }
+.arb-boss .mon-row { justify-content: center; }
+
+/* 骑士三宫格：标签与元素行跟着居中（怪物胶囊仍铺满整列） */
+.arb-knights .side-lab { text-align: center; }
+.arb-knights .weak-line { justify-content: center; }
+
+/* 星铁节点：按波次分组，W1 一组、W2 一组，别把同一波拆散 */
+.wave-block { display: flex; gap: 8rem; align-items: flex-start; }
+.wave-block + .wave-block { margin-top: 6rem; }
+.wave-lab {
+  flex-shrink: 0;
+  padding-top: 14rem;
+  font-size: 10rem;
+  letter-spacing: 0.06em;
+  color: #8b93a7;
+}
+
+/* 节点列拉开间距后每列更窄，列内胶囊同步收一点，避免名字被挤到折行 */
+.hsr-sides .mon { padding: 5rem 9rem 5rem 5rem; gap: 7rem; }
+.hsr-sides .mon img,
+.hsr-sides .mon .mon-ph { width: 34rem; height: 34rem; }
+.hsr-sides .mon span { font-size: 11rem; }
+.hsr-sides .mon em { font-size: 9rem; }
