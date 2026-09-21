@@ -32,9 +32,14 @@ tl_widget_activity: true
 # 限时活动最多显示几条
 tl_widget_activity_limit: 4
 tl_priority: -999
+# 多账号模式：同一 QQ 绑定的多个 UID 是否都渲染
 show_all_bindings: true
+# 体力渲染模式：merge=同游戏多 UID 合并成一张；single=按下面 UID 数分组
+# 经典卡在模板内直接合并，立绘卡/桌面小组件卡由模板一行并排直接出图，三种卡片均生效
 tl_render_mode: merge
+# 合并模式下，一个游戏每张图最多渲染几个 UID（0 或留空 = 全部）
 tl_merge_uids_per_image: 0
+# 独立模式下，一个游戏每张图渲染几个 UID
 tl_uids_per_image: 2
 tl_cards_per_msg: 3
 

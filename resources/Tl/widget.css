@@ -380,3 +380,12 @@ body {
 .wg-trans-sub.ready {
   color: #7fd67f;
 }
+
+/* 合并渲染：多张竖卡一行并排，body 宽度由模板按卡片数撑开 */
+.wg-row {
+  display: flex;
+  align-items: flex-start;
+}
+.wg-row > .wg-wrap {
+  flex: 0 0 auto;
+}

@@ -81,27 +81,26 @@ async function resolveAuth(e, { needCookie = true, game = 'gs' } = {}) {
   let ck = ''
   let ltuid = ''
 
-  // 1) mysUsers 里的 ck（优先带 cookie_token 的完整 CK）
+  // 1) mysUsers 里的 ck。归属匹配优先于凭证质量：
+  //    先选「uids 里明确包含该 uid」的账号；没有任何账号声明归属时才退回归属未知的。
+  //    有账号声明过归属、却都不含该 uid 时宁可不用，避免拿错账号凭证冒充本 UID
+  //    （widget 接口不带 uid，用错凭证 = 多号体力完全一样）。
   const mysUsers = user.mysUsers || {}
-  const prefer = []
+  const quality = (mys) =>
+    (/cookie_token/.test(mys.ck) ? 4 : 0) + (/ltoken=/.test(mys.ck) ? 2 : 0)
+  const candidates = []
   for (const [lt, mys] of Object.entries(mysUsers)) {
     if (!mys?.ck) continue
-    const uids = mys.uids?.[g] || []
-    const matchUid = !uids.length || uids.map(String).includes(String(uid))
-    const score =
-      (/cookie_token/.test(mys.ck) ? 4 : 0) +
-      (/ltoken=/.test(mys.ck) ? 2 : 0) +
-      (matchUid ? 1 : 0)
-    prefer.push({ lt, mys, score, matchUid })
+    const uids = (mys.uids?.[g] || []).map(String)
+    candidates.push({ lt, mys, known: uids.length > 0, match: uids.includes(String(uid)) })
   }
-  // matchUid 已计入 score(+1)，且带 cookie_token/ltoken 权重更高，
-  // 排序后第一个可用候选即最优；命中即停，不能继续覆盖成后面的低分候选。
-  prefer.sort((a, b) => b.score - a.score)
-  for (const item of prefer) {
-    if (item.score <= 0 && prefer.length > 1) continue
-    ck = item.mys.ck
-    ltuid = String(item.lt)
-    break
+  const byQuality = (a, b) => quality(b.mys) - quality(a.mys)
+  const matching = candidates.filter((c) => c.known && c.match).sort(byQuality)
+  const anyKnownOwner = candidates.some((c) => c.known)
+  const picked = matching[0] || (anyKnownOwner ? null : [...candidates].sort(byQuality)[0])
+  if (picked) {
+    ck = picked.mys.ck
+    ltuid = String(picked.lt)
   }
 
   // 2) 有 ltoken 但无 cookie_token 时，仍尝试用 stoken 换完整 ck
