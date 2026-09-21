@@ -1023,15 +1023,37 @@ export class TL extends plugin {
       return true;
     }
 
-    const segments = [];
+    // 渲染模式 / 每图 UID 数：立绘卡与桌面小组件卡同样生效
+    // merge：同游戏多 UID 默认全拼一张（tl_merge_uids_per_image > 0 时按该值分组）
+    // single：同游戏按 tl_uids_per_image 分组，每组一张
+    const mode = cfg.tl_render_mode || 'merge';
+    const perImage = mode === 'single'
+      ? (Number(cfg.tl_uids_per_image) || 2)
+      : (Number(cfg.tl_merge_uids_per_image) || 0);
+
+    const chunks = [];
     for (const game of games) {
       const list = dataMap[game];
-      if (!list) continue;
+      if (!list || !list.length) continue;
+      const size = perImage > 0 ? perImage : list.length;
+      for (let i = 0; i < list.length; i += size) {
+        chunks.push({ game, list: list.slice(i, i + size) });
+      }
+    }
+
+    const segments = [];
+    for (const { game, list } of chunks) {
+      // 同组 UID 交给模板一行并排，直接渲染成最终合并图（不再逐张渲染后再拼接）
+      const render = isWidget ? this.renderWidgetImage : this.renderPortraitImage;
+      const buffer = await render.call(this, e, game, list, displayInfo);
+      if (buffer) {
+        segments.push(segment.image(buffer));
+        continue;
+      }
+      // 整组一张渲染失败 → 退回逐张（每张 ds 只有一项），至少不整组丢图
       for (const item of list) {
-        const seg = isWidget
-          ? await this.renderWidgetCard(e, game, item, displayInfo)
-          : await this.renderPortraitCard(e, game, item, displayInfo);
-        if (seg) segments.push(seg);
+        const single = await render.call(this, e, game, [item], displayInfo);
+        if (single) segments.push(segment.image(single));
       }
     }
 
@@ -1392,62 +1414,78 @@ export class TL extends plugin {
     return out.map(({ title, progress, countdown, urgent }) => ({ title, progress, countdown, urgent }));
   }
 
-  // 单个 gs/sr/zzz UID → 一张立绘卡 segment
-  async renderPortraitCard(e, game, item, displayInfo) {
-    const d = await this.buildStaminaData(game, item, displayInfo);
-    const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
+  // 若干 gs/sr/zzz UID → 立绘卡图片 buffer（模板内一行并排，直接出合并图；失败返回 false）
+  async renderPortraitImage(e, game, items, displayInfo) {
+    const ds = [];
+    for (const item of items || []) {
+      ds.push(await this.buildStaminaData(game, item, displayInfo));
+    }
+    if (!ds.length) return false;
 
     // 立绘横卡 900px 基准 1.0；两段路径 → ppath 手动给 5 层，插件名「小火花」
-    const image = await renderTpl(e, {
+    return renderTpl(e, {
       tpl: 'Tl/Portrait',
       plugin: '小火花',
       tplFile: pluginDir + '/resources/Tl/Portrait.html',
       ppath: '../../../../../plugins/xhh-TL/resources/',
-      data: renderData,
+      data: { ds, qq: displayInfo.qq, qqname: displayInfo.qqname, totalWidthRem: 900 * ds.length },
       baseScale: 1.0,
       rem: true,
       saveId: `Portrait_${game}`,
       reply: false,
     });
-    return image ? segment.image(image) : null;
   }
 
-  // 单个 gs/sr/zzz UID → 一张桌面小组件卡 segment
-  async renderWidgetCard(e, game, item, displayInfo) {
-    const d = await this.buildStaminaData(game, item, displayInfo);
+  // 单个 gs/sr/zzz UID → 一张立绘卡 segment（体力推送等单图场景）
+  async renderPortraitCard(e, game, item, displayInfo) {
+    const buffer = await this.renderPortraitImage(e, game, [item], displayInfo);
+    return buffer ? segment.image(buffer) : null;
+  }
 
-    // 小组件竖卡：仅取 bars[0] 作主资源大数字（中间列表框已按需求移除）
-    const [primary] = d.bars || [];
-    d.primary = primary || null;
+  // 若干 gs/sr/zzz UID → 桌面小组件卡图片 buffer（模板内一行并排，直接出合并图；失败返回 false）
+  async renderWidgetImage(e, game, items, displayInfo) {
+    const ds = [];
+    for (const item of items || []) {
+      const d = await this.buildStaminaData(game, item, displayInfo);
 
-    // 顶部横幅立绘内联为 data URI：CSS background-image 加载 file:// 不阻塞截图，
-    // 偶发会截到背景尚未解码的一帧（渐变底色露出）；内联后像素随 HTML 到位，消除该竞态。
-    if (d.portrait) d.portrait = await toDataUrlTrim(d.portrait);
+      // 小组件竖卡：仅取 bars[0] 作主资源大数字（中间列表框已按需求移除）
+      const [primary] = d.bars || [];
+      d.primary = primary || null;
 
-    // 限时活动区块：数据来自 widget 接口自带字段（buildStaminaData 已解析进 d.acts）
-    // 与官方桌面小组件同源，零额外请求；可关，为空则模板自动不显示
-    if (config().tl_widget_activity === false) {
-      d.acts = [];
-    } else {
-      const limit = Number(config().tl_widget_activity_limit) || 4;
-      d.acts = (d.acts || []).slice(0, limit);
+      // 顶部横幅立绘内联为 data URI：CSS background-image 加载 file:// 不阻塞截图，
+      // 偶发会截到背景尚未解码的一帧（渐变底色露出）；内联后像素随 HTML 到位，消除该竞态。
+      if (d.portrait) d.portrait = await toDataUrlTrim(d.portrait);
+
+      // 限时活动区块：数据来自 widget 接口自带字段（buildStaminaData 已解析进 d.acts）
+      // 与官方桌面小组件同源，零额外请求；可关，为空则模板自动不显示
+      if (config().tl_widget_activity === false) {
+        d.acts = [];
+      } else {
+        const limit = Number(config().tl_widget_activity_limit) || 4;
+        d.acts = (d.acts || []).slice(0, limit);
+      }
+      ds.push(d);
     }
+    if (!ds.length) return false;
 
-    const renderData = { d, qq: displayInfo.qq, qqname: displayInfo.qqname };
-
-    // 小组件竖卡 620px 基准 1.4 提清晰度；两段路径 → ppath 手动给 5 层，插件名「小火花」
-    const image = await renderTpl(e, {
+    // 小组件竖卡 620px 基准 1.4 提清晰度；body 宽按卡片数撑开，模板内一行并排
+    return renderTpl(e, {
       tpl: 'Tl/Widget',
       plugin: '小火花',
       tplFile: pluginDir + '/resources/Tl/Widget.html',
       ppath: '../../../../../plugins/xhh-TL/resources/',
-      data: renderData,
+      data: { ds, qq: displayInfo.qq, qqname: displayInfo.qqname, totalWidthRem: 620 * ds.length },
       baseScale: 1.4,
       rem: true,
       saveId: `Widget_${game}`,
       reply: false,
     });
-    return image ? segment.image(image) : null;
+  }
+
+  // 单个 gs/sr/zzz UID → 一张桌面小组件卡 segment（单图场景）
+  async renderWidgetCard(e, game, item, displayInfo) {
+    const buffer = await this.renderWidgetImage(e, game, [item], displayInfo);
+    return buffer ? segment.image(buffer) : null;
   }
 
   /**
@@ -1698,7 +1736,16 @@ export class TL extends plugin {
 
     // 原神活动日历：widget 接口不返回活动，用 cookie 额外拉 act_calendar（需完整 CK；失败静默不阻塞体力主流程）
     // 自动路径（体力推送轮询）跳过：推送图上的活动条不差这一轮，省下的请求留给阈值命中那次补拉
+    //
+    // ⚠️ 必须按「本张卡片的 uid」查，不能沿用事件的默认主 UID：多号时主 UID 可能属于
+    // 另一个米游社账号，活动会挂错账号。MysInfo 按 targetType 缓存在 runtime 上，这里清掉
+    // 缓存让它按 uid 重新解析；autoRegUid 对已有主 UID 的用户不会改绑定，查完还原 e.uid。
     if (game === 'gs' && config().tl_widget_activity !== false && opts.allowDetail !== false) {
+      const prevUid = e.uid;
+      e.uid = uid;
+      try {
+        if (e.runtime?._mysInfo) delete e.runtime._mysInfo.all;
+      } catch (_) {}
       try {
         const mys = await prepareMysContext(e, 'gs');
         const api = await mys?.runtime?.getMysApi?.('all', { game: 'gs' });
@@ -1710,6 +1757,9 @@ export class TL extends plugin {
         }
       } catch (err) {
         logger.debug?.(`[xhh-TL][act_calendar] ${err?.message}`);
+      } finally {
+        if (prevUid === undefined) delete e.uid;
+        else e.uid = prevUid;
       }
     }
 

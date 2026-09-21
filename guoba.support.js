@@ -152,7 +152,7 @@ export function supportGuoba() {
         {
           field: 'tl_render_mode',
           label: '体力渲染模式',
-          bottomHelpMessage: '合并：同游戏多UID合并一张图；独立：按配置分组渲染',
+          bottomHelpMessage: '合并：同游戏多UID出成一张图；独立：按配置分组渲染。经典/立绘/桌面小组件三种卡片均生效（立绘与小组件由模板并排直接出图）',
           component: 'Select',
           componentProps: {
             options: [
@@ -164,7 +164,7 @@ export function supportGuoba() {
         {
           field: 'tl_merge_uids_per_image',
           label: '合并模式每图UID数',
-          bottomHelpMessage: '合并模式下，一个游戏每张图最多渲染几个UID（默认全部）',
+          bottomHelpMessage: '合并模式下，一个游戏每张图最多渲染几个UID（默认全部）。立绘/桌面小组件卡按此数量并排出图',
           component: 'InputNumber',
           componentProps: {
             min: 1,
@@ -175,7 +175,7 @@ export function supportGuoba() {
         {
           field: 'tl_uids_per_image',
           label: '独立模式每图UID数',
-          bottomHelpMessage: '独立模式下，一个游戏每张图渲染几个UID（默认2）',
+          bottomHelpMessage: '独立模式下，一个游戏每张图渲染几个UID（默认2）。立绘/桌面小组件卡按此数量并排出图',
           component: 'InputNumber',
           componentProps: {
             min: 1,
