@@ -158,7 +158,12 @@ async function readFromSqlite(qq) {
     const user = users[0]
     if (!user) {
       // 也可能没有 Users 行但仍有 redis/stoken
-      return { games: {}, mysUsers: {}, uidLists: { gs: [], sr: [], zzz: [] } }
+      return {
+        games: {},
+        mysUsers: {},
+        uidLists: { gs: [], sr: [], zzz: [] },
+        hasRow: false,
+      }
     }
 
     let games = {}
@@ -236,7 +241,7 @@ async function readFromSqlite(qq) {
       }
     }
 
-    return { games, mysUsers, uidLists }
+    return { games, mysUsers, uidLists, hasRow: true, ltuids }
   } catch (e) {
     logger?.debug?.(`[xhh-TL][userBind] read sqlite failed: ${e.message}`)
     return null
@@ -283,7 +288,7 @@ function readFromStokenYaml(qq) {
       type: 'stoken',
       region: entry.region || '',
       region_name: entry.region_name || '',
-      stuid: entry.stuid || '',
+      stuid: entry.stuid || entry.ltuid || '',
     })
 
     const stuid = entry.stuid || entry.ltuid
@@ -311,6 +316,49 @@ function readFromStokenYaml(qq) {
   }
 
   return { games: {}, mysUsers, uidLists }
+}
+
+/**
+ * stoken yaml 的「存活账号」闸门。
+ *
+ * 宿主（Users 表）一旦有了该 QQ 的绑定行，它就是绑定的唯一权威：用户 #删除ck 之后，
+ * xiaoyao / 扫码登录写下的那份 yaml 不会被清理，残留条目若原样并入，体力总览、多号
+ * 列表就会把早已解绑的账号重新「复活」并逐个请求接口（单号查询走 getstoken，那边
+ * 有同样的判定，所以只有多号枚举会出现这种不一致）。
+ *
+ * 这里只保留 stuid 仍在 Users.ltuids 里的条目 —— 与 Runtime 侧 mergeRuntimeSupplements
+ * 的闸门同一语义：yaml 只能给存活账号补凭证与 UID，不能凭空复活账号。
+ *
+ * Users 无行（纯扫码 stoken 用户 / 宿主没装 genshin）或读库失败时不做任何过滤；
+ * 没有 stuid 的老条目无法归属，原样保留。
+ */
+function gateStokenYamlByAliveIds(yamlPart, sqlitePart) {
+  if (!yamlPart) return yamlPart
+  if (!sqlitePart?.hasRow) return yamlPart
+  const alive = new Set((sqlitePart.ltuids || []).map(String))
+
+  const dropped = []
+  const uidLists = {}
+  for (const [game, list] of Object.entries(yamlPart.uidLists || {})) {
+    uidLists[game] = (list || []).filter((item) => {
+      const stuid = String(item?.stuid || item?.ltuid || '')
+      if (!stuid || alive.has(stuid)) return true
+      dropped.push(String(item?.uid || ''))
+      return false
+    })
+  }
+
+  const mysUsers = {}
+  for (const [stuid, entry] of Object.entries(yamlPart.mysUsers || {})) {
+    if (alive.has(String(stuid))) mysUsers[stuid] = entry
+  }
+
+  if (dropped.length) {
+    logger?.info?.(
+      `[xhh-TL][userBind] 跳过 stoken yaml 里已解绑账号的 ${dropped.length} 个 UID：${dropped.join('、')}`,
+    )
+  }
+  return { games: yamlPart.games || {}, mysUsers, uidLists }
 }
 
 function mergeBindData(...parts) {
@@ -566,7 +614,7 @@ export async function createUser(qqOrE, e = null) {
 
   // 2) SQLite + stoken + redis
   const sqlitePart = await readFromSqlite(qq)
-  const yamlPart = readFromStokenYaml(qq)
+  const yamlPart = gateStokenYamlByAliveIds(readFromStokenYaml(qq), sqlitePart)
   const redisGames = {}
   for (const g of GAMES) {
     const uid = await readMainUidFromRedis(qq, g)
