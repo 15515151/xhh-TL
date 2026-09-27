@@ -13,3 +13,6 @@ resources/ww_role_pile/
 
 # 过码服务（放在 solver 分支）：一键部署会拉到本地，但不该提交进 master
 /service/
+
+# 框架在本目录下写的运行时日志
+logs/
