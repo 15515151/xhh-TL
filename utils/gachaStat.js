@@ -82,8 +82,19 @@ export async function getIcon(name, itemType) {
   const isChar = itemType === '角色'
   const meta = isChar ? models.Character?.get?.(name, 'sr') : models.Weapon?.get?.(name, 'sr')
   const icon = (isChar ? meta?.imgs?.face : meta?.imgs?.icon) || ''
-  // 角色的 face 带前导斜杠、光锥的 icon 不带，模板里要拼 {{_miao_path}} 所以统一补上
-  return icon && !icon.startsWith('/') ? `/${icon}` : icon
+  if (!icon) return ''
+  /**
+   * 模板里是 {{_miao_path}}{{icon}}，而 _miao_path 已经以 / 结尾（JiuLi runtime 注入）。
+   * miao 的 face 有两种形态：
+   *   1) 绝对样式 /meta-sr/character/xxx/imgs/face.webp（资源就在 miao 自己目录里）
+   *   2) 跨插件借资源的**相对路径** ../../wiki/resources/meta-sr/character/真珠/imgs/face.webp
+   *      （miao 的资源索引索引不到时，路径是按 miao-plugin/resources 为基准算出来的）
+   * 原来的代码给非斜杠开头的路径补了个前导 /，对第 2 种是灾难：
+   *   /../../wiki/... 会被当成"从文件系统根开始"，中间的 ../.. 直接被裁掉 → 404，
+   *   表现就是"抽卡记录里这个角色没有头像，但 miao 自己的面板有"（真珠 1503 就是这样）。
+   * 统一去掉前导斜杠即可：绝对样式交给 _miao_path 拼接，相对路径的 .. 才有效。
+   */
+  return icon.replace(/^[/\\]+/, '')
 }
 
 /**
