@@ -4,7 +4,7 @@ import moment from 'moment';
 import md5 from 'md5';
 import lodash from 'lodash';
 import plugin from '../../../lib/plugins/plugin.js';
-import { createUser } from '../utils/userBind.js';
+import { createUser, getAliveMysIds, hasRuntimeBinding } from '../utils/userBind.js';
 import { getstoken, cookiePart, stokenToCookie } from '../utils/auth.js';
 import common from '../../../lib/common/common.js';
 import { config, pluginDir, pickCharacterPortrait, pickPortraitBg, toDataUrl, toDataUrlTrim } from '../utils/pluginConfig.js';
@@ -1627,6 +1627,18 @@ export class TL extends plugin {
         }
         uid = alt;
       }
+    }
+
+    // 体力是私有数据：注册 UID 不是账号归属证明。必须先验证当前绑定的
+    // 通行证确实拥有这个游戏 UID，避免后续 stoken/resolveAuth 兜底串号。
+    const binding = await getAliveMysIds(qq);
+    if (binding.hasRow || hasRuntimeBinding(e)) {
+      const ownerUser = await createUser(qq, e);
+      const owned = Object.entries(ownerUser.mysUsers || {}).some(([sid, mys]) =>
+        (!binding.hasRow || binding.ids.has(String(sid))) &&
+        (mys?.uids?.[game] || []).map(String).includes(String(uid))
+      );
+      if (!owned) return '没有';
     }
 
     let sk = await getstoken(qq, uid, e);

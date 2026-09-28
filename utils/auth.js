@@ -181,6 +181,18 @@ export async function getstoken(qq, uid, e = null) {
     bind = await getAliveMysIds(qq)
   } catch (_) {}
 
+  // 先验证 UID 归属，再读任何 yaml/缓存。旧文件即使残留了该 UID，
+  // 也不能绕过当前绑定库，用另一通行证的凭证查询私有数据。
+  if (bind.hasRow) {
+    const user = await createUser(qq, e)
+    const owned = Object.entries(user.mysUsers || {}).some(([sid, mys]) =>
+      bind.ids.has(String(sid)) &&
+      Object.values(mys?.uids || {}).some(list =>
+        Array.isArray(list) && list.map(String).includes(String(uid)))
+    )
+    if (!owned) return false
+  }
+
   // 已删名单：#删除ck 时由钩子(delCkHook)记录的被删 stuid → 删除当时的 stoken 指纹。
   const deletedMap = getDeletedMap(qq) // { stuid: fingerprint }
 
@@ -264,8 +276,8 @@ export async function getstoken(qq, uid, e = null) {
 
     if (!bind.hasRow) return candidates[0]
 
-    const sids = [...new Set(candidates.map(entrySid).filter(Boolean))]
-    if (sids.length === 1) return candidates[0]
+    // 单一存活账号不代表请求的 UID 属于它；归属不明时不能借用其 stoken。
+    // 同通行证的跨游戏 UID 应由绑定库提供映射，而不是靠候选数量猜测。
     return false
   }
 

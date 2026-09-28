@@ -222,8 +222,15 @@ async function readFromSqlite(qq) {
     // 注册 UID（无 CK 也可查询部分接口；体力需要 stoken）
     for (const g of GAMES) {
       const ds = games[g] || {}
-      if (ds.uid) pushUid(g, ds.uid, { type: ds.data?.[ds.uid]?.type || 'reg' })
       const data = ds.data || {}
+      // games[g].uid 是「当前主 UID」，但 #删除ck 只删通行证、不会清它，删号后它会
+      // 残留成孤儿。已解绑的号不该再进 UID 列表（否则列表、绑定提示里会「复活」它）。
+      // 判据与 genshin 的 getUidList 一致：列表 = mysUsers.uids + games.data，
+      // 故只有「归属集合内的号」或「用户显式注册的号」才收 games[g].uid；
+      // 完全没有归属信息（纯扫码 stoken 用户 / 宿主无 genshin）时保持旧行为全收。
+      const owned = ownedUidsOf(mysUsers, g)
+      const mainUsable = ds.uid && (!owned.size || owned.has(String(ds.uid)) || !!data[ds.uid])
+      if (mainUsable) pushUid(g, ds.uid, { type: data[ds.uid]?.type || 'reg' })
       for (const uid of Object.keys(data)) {
         pushUid(g, uid, { type: data[uid]?.type || 'reg' })
       }
@@ -361,6 +368,17 @@ function gateStokenYamlByAliveIds(yamlPart, sqlitePart) {
   return { games: yamlPart.games || {}, mysUsers, uidLists }
 }
 
+/** 某游戏下「已被存活通行证声明归属」的 UID 集合（读 mysUsers[].uids）。 */
+function ownedUidsOf(mysUsers, game) {
+  const set = new Set()
+  for (const mys of Object.values(mysUsers || {})) {
+    for (const u of mys?.uids?.[game] || []) {
+      if (u) set.add(String(u))
+    }
+  }
+  return set
+}
+
 function mergeBindData(...parts) {
   const out = {
     games: {},
@@ -371,7 +389,10 @@ function mergeBindData(...parts) {
 
   for (const part of parts) {
     if (!part) continue
-    Object.assign(out.mysUsers, part.mysUsers || {})
+    // yaml 补凭证时不能覆盖 SQLite 已确认的 UID 归属。
+    for (const [sid, mys] of Object.entries(part.mysUsers || {})) {
+      out.mysUsers[sid] = { ...out.mysUsers[sid], ...mys }
+    }
     for (const g of GAMES) {
       if (part.games?.[g]?.uid && !out.games[g]?.uid) {
         out.games[g] = out.games[g] || { uid: '', data: {} }
@@ -386,7 +407,9 @@ function mergeBindData(...parts) {
     }
   }
 
-  // 主 UID 提前
+  // 主 UID 提前（只在它本来就在列表里时调整顺序）。
+  // 不在列表里 ≠ 需要补进去：#删除ck 后 games[g].uid 会残留成孤儿，而列表已由
+  // 各数据源按归属/注册过滤掉它 —— 此时再 unshift 就等于把解绑的号「复活」。
   for (const g of GAMES) {
     const main = String(out.games[g]?.uid || '')
     if (!main) continue
@@ -395,8 +418,6 @@ function mergeBindData(...parts) {
     if (idx > 0) {
       const [item] = list.splice(idx, 1)
       list.unshift(item)
-    } else if (idx < 0) {
-      list.unshift({ uid: main, type: 'main' })
     }
   }
   return out
@@ -420,10 +441,26 @@ class BindUser {
   getUid(game = 'gs') {
     const g = gameKey(game)
     if (g === 'bh3') return this._uidLists.bh3?.[0]?.uid || ''
-    const main = this._games[g]?.uid
-    if (main) return String(main)
     const list = this.getUidList(g)
-    return list[0] ? String(list[0].uid || list[0]) : ''
+    const first = list[0] ? String(list[0].uid || list[0]) : ''
+    const main = this._games[g]?.uid ? String(this._games[g].uid) : ''
+
+    // games[g].uid 是「当前主 UID」，但 #删除ck 只删通行证、不会把它清掉，
+    // 删号后它会残留成孤儿（UID 列表里其实已经没有它了）。两个来源必须自洽：
+    // 只要还有通行证声明过归属（mysUsers[].uids[g] 非空），返回的 UID 就必须在
+    // 归属集合里 —— 否则视作残留，回退到列表里第一个真正被拥有的号。
+    // 完全没有归属信息时（纯扫码 stoken 用户 / 宿主无 genshin）保持旧行为。
+    const owned = ownedUidsOf(this.mysUsers, g)
+    if (owned.size) {
+      if (main && owned.has(main)) return main
+      for (const item of list) {
+        const u = String(item?.uid ?? item ?? '')
+        if (u && owned.has(u)) return u
+      }
+      return ''
+    }
+    if (main) return main
+    return first
   }
 
   getUidList(game = 'gs') {
@@ -562,7 +599,19 @@ function mergeRuntimeSupplements(runtimeUser, qq) {
 
   const getUid = (game = 'gs') => {
     const key = gameKey(game)
-    return runtimeUser.getUid?.(key) || lists[key]?.[0]?.uid || ''
+    const owned = ownedUidsOf(mysUsers, key)
+    const main = runtimeUser.getUid?.(key) ? String(runtimeUser.getUid(key)) : ''
+    // 同 BindUser.getUid：宿主主 UID 可能残留成孤儿（#删除ck 不清 games[g].uid），
+    // 有归属信息时以归属集合为准，回退到列表里第一个真正被拥有的号。
+    if (owned.size) {
+      if (main && owned.has(main)) return main
+      for (const item of lists[key] || []) {
+        const u = String(item?.uid ?? item ?? '')
+        if (u && owned.has(u)) return u
+      }
+      return ''
+    }
+    return main || lists[key]?.[0]?.uid || ''
   }
   const getUidList = (game = 'gs') => lists[gameKey(game)] || []
   const getMysUser = (game = 'gs') => {

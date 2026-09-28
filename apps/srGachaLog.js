@@ -306,9 +306,98 @@ function readLocal(userId, uid, type) {
  * 出图是只读路径，不该因为某个池的文件坏了就整张图出不来；但也不能把损坏当「空库」
  * 交给写入路径（那会覆盖掉原文件）。所以这里单独包一层，只给 buildViewData / buildAllViewData 用。
  */
+/**
+ * 出图路径的防御性去重：同一发五星被记了两次时只留真实那条，
+ * 并把被顶替的 mini 名下的占位一并清掉。
+ *
+ * 判据与写入路径同一套：item_id + id 前 10 位（批次）精确，item_id + 日期兜底
+ * （Excel 导入的伪 id 与接口批次水位对不上，只能按日期对）。计数一对一消耗，
+ * 双黄（同批次两条同名五星）不会被误删成一条。
+ *
+ * ⚠️ 必须连占位一起清。analyse 里一条五星的抽数 = 它到**更旧那条五星**之间的记录数，
+ * 光删 mini 的话，它上方那批占位就整段落进上一条五星的间隔里，抽数直接翻倍
+ * （实测 68 抽变成 68+54=122）。
+ *
+ * 占位是给「上一条五星」撑抽数用的，所以它挂在**被删 mini 的上方**（id 更大侧），
+ * 且与锚点同批次。判据取「批次相同」而不是「位置相邻」：
+ *   - mini 与它的配对真实记录是同一发，批次（id 前 10 位）必然相同；
+ *   - 占位由 buildPlaceholders 从锚点 id 往下递减造出，前 10 位与锚点保持一致。
+ * 于是「批次 == 被删 mini 的批次」精确圈出这批占位，
+ * 不会误伤给别条五星（别的批次）造的那些。
+ */
+function dedupeMini(list) {
+  if (!Array.isArray(list) || list.length < 2) return list
+  const realKeys = new Map()
+  const bump = (k) => realKeys.set(k, (realKeys.get(k) || 0) + 1)
+  for (const r of list) {
+    if (r.xhh_ph || r.xhh_src === 'mini') continue
+    bump(`${r.item_id}@${String(r.id).slice(0, 10)}`)
+    if (r.time) bump(`${r.item_id}@${String(r.time).slice(0, 10)}`)
+  }
+  if (!realKeys.size) return list
+
+  // 同批次（id 前 10 位）的记录总数，不含 mini —— 就是这一发实际花掉的抽数。
+  // 占位本来就是「补齐到接口给的 gacha_count」造的，所以这个数就是接口那个值。
+  // 删掉占位后要靠它给接班的真实记录兜底，否则没存过 xhh_pity 的老记录会缩水成
+  // 「本地那几条真实逐抽数」。
+  const batchTotal = new Map()
+  for (const r of list) {
+    if (r.xhh_src === 'mini') continue
+    const b = String(r.id).slice(0, 10)
+    batchTotal.set(b, (batchTotal.get(b) || 0) + 1)
+  }
+
+  const drop = new Set()
+  // 自上一个五星以来攒下的占位。list 是 id 降序，所以它们是「更新」的一批，
+  // 正是给上一条五星撑抽数的那些
+  let pendingPh = []
+  const flush = (batch) => {
+    for (const p of pendingPh) {
+      if (String(p.id).slice(0, 10) === batch) drop.add(p)
+    }
+    pendingPh = []
+  }
+
+  for (const r of list) {
+    if (String(r.rank_type) === '5') {
+      if (r.xhh_src === 'mini') {
+        const keys = [`${r.item_id}@${String(r.id).slice(0, 10)}`]
+        if (r.time) keys.push(`${r.item_id}@${String(r.time).slice(0, 10)}`)
+        const hit = keys.find((k) => (realKeys.get(k) || 0) > 0)
+        if (hit) {
+          realKeys.set(hit, realKeys.get(hit) - 1)
+          drop.add(r)
+          const batch = String(r.id).slice(0, 10)
+          flush(batch)
+          // 接班的那条真实五星（同批次）。占位一删它的本地间隔就只剩真实逐抽了，
+          // 没存过抽数的话用批次总数补上。
+          // ⚠️ 只在「该批次恰好只有一个非 mini 五星」时才敢用 batchTotal 当抽数：
+          // 这时批次里的记录正好是「上一条五星之后到这一条」的全部，等于接口给的 gacha_count。
+          // 同批次有两个五星（十分钟内连出）时，批内会混进上一条五星之前的记录，
+          // 拿总数当抽数会多算 —— 这种情况宁可不动，交给 analyse 取 max 兜底
+          const fiveInBatch = list.filter(
+            (x) => String(x.rank_type) === '5' && x.xhh_src !== 'mini' &&
+              String(x.id).slice(0, 10) === batch,
+          )
+          const total = batchTotal.get(batch) || 0
+          if (fiveInBatch.length === 1 && total > 0 && Number(fiveInBatch[0].xhh_pity || 0) < total) {
+            fiveInBatch[0].xhh_pity = String(total)
+          }
+          continue
+        }
+      }
+      // 保留的五星：它上方那批占位是有用的，留着
+      pendingPh = []
+    } else if (r.xhh_ph) {
+      pendingPh.push(r)
+    }
+  }
+  return list.filter((r) => !drop.has(r))
+}
+
 function readLocalForView(userId, uid, type) {
   try {
-    return readLocal(userId, uid, type)
+    return dedupeMini(readLocal(userId, uid, type))
   } catch (err) {
     logger?.error?.(`[xhh-TL][抽卡记录] ${type} 池读取失败，本次出图跳过该池：${err?.message}`)
     return []
@@ -414,7 +503,16 @@ const dupKeyBucket = (itemId, id) => {
  * 真实记录只增不删；占位每次重建，所以重复执行不会累加。
  */
 function mergePool(userId, uid, type, remote, poolStat) {
-  const local = readLocal(userId, uid, type)
+  const raw = readLocal(userId, uid, type)
+  /**
+   * ⚠️⚠️ 冗余 mini 必须在**这里**就清掉，不能只靠出图侧兜底。
+   * 本地已有同批次真实记录的 mini 是纯冗余，它留在数据里会连锁出错：
+   *   - localGap 多量一段 → 抽数口径错
+   *   - legacy 把它当成「还需要占位撑抽数」的锚点 → fillGap 又给它上方补一整批占位
+   * 实测光锥池那条冗余 mini 让「你将起身歌唱」凭空多出 54 条占位，68 抽显示成 122 抽。
+   * 放在读取处而不是写盘前，是因为下面每一段都依赖这份干净数据。
+   */
+  const local = dedupeMini(raw)
   const real = local.filter(r => !r.xhh_ph)
   const usedIds = new Set(real.map(r => String(r.id)))
 
@@ -592,7 +690,10 @@ function mergePool(userId, uid, type, remote, poolStat) {
     }
   }
 
-  const changed = added.length > 0 || patched > 0 || local.length !== real.length
+  // 清掉冗余 mini（raw → local）本身就是变更，必须落盘，否则每次更新都白清一遍、
+  // 数据里那两条永远躺着。出图侧虽然也兜了一道，但写盘才是根治
+  const changed =
+    added.length > 0 || patched > 0 || local.length !== real.length || raw.length !== local.length
   if (changed) {
     const merged = [...added, ...real].sort((a, b) => {
       const x = big(a.id)
@@ -1031,36 +1132,35 @@ function mergeImport(userId, uid, records) {
       if (r.id) ids.add(String(r.id))
     }
 
-    // 只有真的并进了新记录，才动本地：让同一个五星的小程序记录退位、顺带重建占位。
-    // 全是重复的时候一个字节都不改，免得白清掉占位丢了垫抽进度。
-    if (!add.length) {
-      stat.skipped += 0
-      continue
-    }
-
     // 顶替判据：b: key（item_id + id 前 10 位）精确，d: key（item_id + 日期）只作兜底。
+    //
+    // ⚠️ 判据来源必须**同时**包含「本地已有的非 mini 记录」和「本轮新增的记录」：
+    //   只看 add（原来那样）：真实记录一旦先落地（前一次更新/导入写过），这次它就被
+    //     ids 判重挡在 add 外，mini 永远等不到顶替者 —— 同一发五星在图上出现两次。
+    //     增量模式（full=false）的 floor 越过它、接口不再返回时也是同样结果。
+    //   只看 localNonMini：本轮新增的记录还没写进本地，也就顶不掉 mini。
+    // mini 记录存在的唯一意义就是「等着被真实记录顶替」，两边都要能当顶替者。
+    //
     // ⚠️ 用「计数」而不是 Set：Set 是命中即删，同日同名的两个五星（双黄、复刻连抽）
     // 会让 mini 的两条一起被删掉，而导入的只有一条 —— 少算一个五星。
     // 计数改成一对一消耗，来几条就顶掉几条。
     const coverCount = new Map()
     const bump = (k) => coverCount.set(k, (coverCount.get(k) || 0) + 1)
-    for (const r of add) {
-      bump(`b:${r.item_id}@${String(r.id).slice(0, 10)}`)
-      // 日期级 key 只在没有精确 b: 可用时才参与兜底，避免它把同名的另一条误吞
-      if (r.time) bump(`d:${r.item_id}@${String(r.time).slice(0, 10)}`)
-    }
-    let dropMini = 0
     // 顶替之前先把 mini 记录上的官方抽数（xhh_pity）交给接班的真实记录：
     // authkey 只给最近 6 个月，跨在截断边界上的那个五星本地间隔算不准，
     // 丢了这个字段就只能等下一次 *更新抽卡记录 才补回来
     const addFive = new Map()
-    for (const r of add) {
-      if (String(r.rank_type) !== '5') continue
+    for (const r of [...localNonMini, ...add]) {
       const bk = `b:${r.item_id}@${String(r.id).slice(0, 10)}`
       const dk = r.time ? `d:${r.item_id}@${String(r.time).slice(0, 10)}` : ''
+      bump(bk)
+      // 日期级 key 只在没有精确 b: 可用时才参与兜底，避免它把同名的另一条误吞
+      if (dk) bump(dk)
+      if (String(r.rank_type) !== '5') continue
       if (!addFive.has(bk)) addFive.set(bk, r)
       if (dk && !addFive.has(dk)) addFive.set(dk, r)
     }
+    let dropMini = 0
     const kept = localReal.filter(r => {
       if (r.xhh_src !== 'mini') return true
       // 小程序的 id 与游戏内导出前 10 位（批次时间戳）一致，Excel 的伪 id 只能按日期对。
@@ -1083,7 +1183,15 @@ function mergeImport(userId, uid, records) {
     // 只有当真实记录顶掉了小程序五星，占位才失去意义（它们是挂在那些五星上的）；
     // 否则原样留着，别让一次小规模导入把垫抽进度清光
     const phKept = dropMini ? [] : local.filter(r => r.xhh_ph)
-    writeLocal(userId, uid, type, [...add, ...kept, ...phKept].sort(byIdDesc))
+    // 本轮什么都没变时一个字节都不改：免得白清掉占位丢了垫抽进度。
+    // （add 为空但仍要落盘的唯一情形是 dropMini>0 —— 清 mini 记录本身就是变更）
+    if (!add.length && !dropMini) {
+      stat.skipped += 0
+      continue
+    }
+    // 落盘前再兜一道：本地已有同批次真实记录的 mini 一并清掉（含它名下的占位）。
+    // 正常情况 kept 那步已经顶掉了，这里防的是「顶替判据没覆盖到的边角」
+    writeLocal(userId, uid, type, dedupeMini([...add, ...kept, ...phKept].sort(byIdDesc)))
     stat.added += add.length
     stat.dropPh += dropMini ? dropPh : 0
     stat.dropMini += dropMini
