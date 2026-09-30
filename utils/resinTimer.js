@@ -52,6 +52,26 @@ const MAX_RETRY = 5
 /** 两种提醒类型（存储键名） */
 const TYPES = ['transformer', 'homeCoin']
 
+/**
+ * 到点复核不通过时的重挂间隔下限。
+ * 复核发现「服务器说该满了、实际没满」时按服务器新给的倒计时重挂，
+ * 但绝不允许它低于这个值 —— 万一服务端返回 0/极小值，60 秒一轮会把
+ * dailyNote 打到 1034 风控上，取 5 分钟兜底。
+ */
+const DEFER_MIN_MS = 5 * 60 * 1000
+/**
+ * 复核连续不通过多少次后转入长退避。
+ *
+ * ⚠️ 是「退避」不是「放弃」：早期写成标 fired 收场，那样会永久吞掉提醒 ——
+ * 洞天宝钱要 46 小时才满，复核当然连不通过几十次，标 fired 之后
+ * mergeDeadline 见 fired 就保持 fired，真满的那一刻也不会再通知了。
+ * 现在改成把 dueAt 推到 DEFER_BACKOFF_MS 之后并清零计数，状态仍是 armed，
+ * 于是它低频地一直盯着，真满了照样发。
+ */
+const MAX_DEFER = 6
+/** 长退避间隔（复核反复拿不到有效倒计时时用） */
+const DEFER_BACKOFF_MS = 2 * 60 * 60 * 1000
+
 /** 内存缓存（首次读盘后常驻，写入时同步更新） */
 let _store = null
 /** 已挂的定时器：`${game}:${uid}:${type}` → Timeout */
@@ -59,10 +79,11 @@ const _timers = new Map()
 /**
  * 正在投递中的提醒（fire 已开始、还没落盘 fired）。
  * 挡住这段时间里 arm()/scheduleTimers() 的重挂，避免同一人收到多条重复推送。
+ * 复核（可能是一次 12 秒超时的接口查询）也算在这个窗口里。
  */
 const _inflight = new Set()
-/** 由 resinPush 注册：targets 同步反查订阅者，send 异步发送 */
-let _hooks = { targets: null, send: null }
+/** 由 resinPush 注册：targets 同步反查订阅者，send 异步发送，verify 到点复核 */
+let _hooks = { targets: null, send: null, verify: null }
 
 // ============ 存储 ============
 
@@ -126,8 +147,27 @@ function readTransformerDeadline(data, now) {
 
 /**
  * 洞天宝钱：满了才提醒。
- * home_coin_recovery_time 是**字符串**剩余秒（实测 dailyNote 返回 "200255"），要 Number 强转。
- * widget 接口不返回该字段 → 返回 null，等下次走 dailyNote 的查询，不猜速率。
+ *
+ * 判据只有 `cur >= max` 这一条 —— 见下面 sec 的坑，别拿倒计时当满。
+ *
+ * home_coin_recovery_time 是**字符串**剩余秒（实测 dailyNote 返回 "167286"），
+ * 要 Number 强转，且它**确实**是「按理论产出速率算的距满秒数」：
+ * 实测 1410 个 ÷ 46.47 小时 = 30.3 个/小时，两次采样都吻合。
+ *
+ * ⚠️⚠️ 但它会和实际库存脱钩，绝不能当成「到点就满了」：
+ * 2026-09-30 实测同一账号，cur 卡在 990/2400 五十分钟纹丝不动，
+ * 而 sec 老老实实每秒 -1（167286 → 166020）。即「倒计时在走、宝钱没涨」——
+ * 米游社按理论速率倒计时，实际产出是另一回事（洞天产出停滞时就这样）。
+ * 那时 sec 归零只代表「一个理论周期结束」，不代表攒满，据此推送就是假提醒
+ * （04:08:32 那条「洞天宝钱已经满啦」正是这么来的，而它当时只有 990/2400，
+ * 用户 04:10:44 自己一查就能戳穿）。
+ *
+ * 所以 sec 仍然用来估个「大概什么时候到点」（免得空转轮询），
+ * 但那个时刻只是**复核预约**：到点由 resinPush.verify 重查真身，
+ * cur >= max 才真发（见 fire 里的 _hooks.verify）。
+ *
+ * 另一个变量：此字段是字符串，实测有值；widget 接口不返回它 → 返回 null，
+ * 等下次走 dailyNote 的查询，不猜速率。
  */
 function readHomeCoinDeadline(data, now) {
   const cur = Number(data?.current_home_coin)
@@ -167,7 +207,17 @@ function mergeDeadline(prev, info, now) {
   if (prev?.state === 'fired') {
     return { dueAt: info.dueAt, state: 'armed', notifiedAt: prev.notifiedAt || 0 }
   }
-  return { dueAt: info.dueAt, state: 'armed', notifiedAt: 0 }
+  // ⚠️ 这里返回的是**全新对象**，必须把 attempt / defer 显式带过来。
+  // 它们分别记着「发送失败重试了几次」「到点复核没通过几次」，重挂时要接着数：
+  // 每次查询都会走到这行（用户发指令、10 分钟 cron 命中缓存），漏带就等于
+  // 每轮把计数清零 → 退避形同虚设、复核永远攒不到上限，无限重试。
+  return {
+    dueAt: info.dueAt,
+    state: 'armed',
+    notifiedAt: 0,
+    attempt: prev?.attempt || 0,
+    defer: prev?.defer || 0,
+  }
 }
 
 // ============ 定时器 ============
@@ -250,8 +300,88 @@ function markFired(game, uid, type) {
   st.notifiedAt = Date.now()
   // 重试计数归零：这一轮已了结，下次重新武装（用户用掉后）从 0 开始数
   st.attempt = 0
+  st.defer = 0
   store[game][uid].updatedAt = Date.now()
   saveStore(store)
+}
+
+/**
+ * 到点复核：问一次真实状态，确认「确实到点了」才允许推送。
+ *
+ * 为什么必须有这一步：dueAt 是照 dailyNote 的**倒计时字段**算的，
+ * 而洞天宝钱的倒计时会和实际库存脱钩（见 readHomeCoinDeadline 的注释）。
+ * 没有复核 = 拿一个会撒谎的字段决定要不要 @ 人。
+ *
+ * 三种返回：
+ *   { ready: true }  确实到点了 → 正常发送
+ *   { ready: false, dueAt, snap }  还没到 → defer 重挂（dueAt 为下次预约时刻）
+ *   null             连兜底快照都没有、判不了 → 放行发送
+ *
+ * ⚠️ null 是最后兜底：verifyReminder 内部已经做了两层判断（接口真身 →
+ * 记录里的旧快照），只有两层都拿不到信息才走到这里。放行是为了「宁可偶尔
+ * 误报，也别把真提醒永久吞掉」——但这个口子已经收得很窄了。
+ */
+async function verifyDeadline({ game, uid, type }) {
+  if (!_hooks.verify) return null
+  try {
+    const v = await _hooks.verify({ game, uid, type })
+    if (!v || typeof v !== 'object') return null
+    return v.ready === true ? { ready: true } : { ready: false, dueAt: v.dueAt, snap: v.snap }
+  } catch (err) {
+    log.debug?.(`[xhh-TL][resinTimer] 复核失败 ${game}/${uid}/${type}: ${err?.message}`)
+    return null
+  }
+}
+
+/**
+ * 复核不通过：这一轮不发，按服务器新给的倒计时重挂等下一次。
+ *
+ * ⚠️ 这段在 fire 的 try 里、_inflight 还没释放（在 finally 里），
+ * 必须 force 绕过自己的锁，否则重挂不上、这条提醒就此断掉。
+ *
+ * 连续 defer 次数存在 st.defer 里（不靠参数传，和 attempt 同理）：
+ * 攒够 MAX_DEFER 次就转长退避（状态**保持 armed**），防的是坏数据把定时器
+ * 变成高频轮询器 —— 但绝不标 fired，那样真到满的那一刻就永远不通知了。
+ */
+function defer(game, uid, type, verdict) {
+  const store = loadStore()
+  const st = store?.[game]?.[uid]?.[type]
+  if (!st || st.state !== 'armed') return
+
+  let n = Number(st.defer || 0) + 1
+  let wait
+  const raw = Number.isFinite(Number(verdict?.dueAt)) ? Number(verdict.dueAt) : 0
+
+  if (raw > Date.now()) {
+    // 服务器给了明确的下次到期时刻（宝钱有 sec，能算出 46 小时后）→ 就按它约，
+    // 保底 DEFER_MIN_MS 防「服务器给个极小值导致高频轮询」。这是最常见的一条：
+    // 复核时还没满，sec 会重新给出一个完整的到满时间，于是下次到点再看。
+    wait = Math.max(raw - Date.now(), DEFER_MIN_MS)
+    n = 0 // 有明确时刻可循，不算「反复拿不到信息」，计数归零
+  } else if (n >= MAX_DEFER) {
+    // 反复拿不到有效的下次时刻（比如质变仪的 view 只有「N天后」文本、没有秒数，
+    // 或者服务端一直给 0）→ 转低频长退避继续盯，**不放弃**
+    wait = DEFER_BACKOFF_MS
+    n = 0
+    log.debug?.(`[xhh-TL][resinTimer] ${game}/${uid}/${type} 复核反复无结果，转 ${DEFER_BACKOFF_MS / 3600000} 小时长退避`)
+  } else {
+    wait = DEFER_MIN_MS
+  }
+
+  st.defer = n
+  // 复核拿到的新快照顺手写回：下次到点出图/再复核都用它，别拿着过期数据反复算
+  if (verdict?.snap && typeof verdict.snap === 'object') {
+    store[game][uid].snap = { ...(store[game][uid].snap || {}), ...verdict.snap }
+  }
+  store[game][uid].updatedAt = Date.now()
+  // dueAt 同步推到新时刻：timerStats 展示、以及下次 scheduleTimers 认它
+  st.dueAt = Date.now() + wait
+  saveStore(store)
+
+  log.debug?.(
+    `[xhh-TL][resinTimer] ${game}/${uid}/${type} 复核未到点，${Math.round(wait / 1000)} 秒后再看`,
+  )
+  arm(game, uid, type, wait, true)
 }
 
 /**
@@ -276,7 +406,7 @@ async function fire(game, uid, type) {
 
   const targets = hasTargets(game, uid) ? _hooks.targets(game, uid) || [] : []
   // 出图用的精简快照（记录里存的那份，不重查接口）
-  const item = store[game][uid].snap || { uid: String(uid) }
+  let item = store[game][uid].snap || { uid: String(uid) }
 
   // 没有订阅者：直接标 fired，不必重试（用户可能刚关掉推送）
   if (!targets.length) {
@@ -286,6 +416,31 @@ async function fire(game, uid, type) {
 
   _inflight.add(key)
   try {
+    // 到点复核：**发送前必须确认真的到了**。
+    // 定时器的 dueAt 是照 dailyNote 的倒计时算的，而那个倒计时会撒谎 ——
+    // home_coin_recovery_time 按理论速率走，实际库存可能停滞（2026-09-30 实测
+    // 990/2400 卡住不动、倒计时却一秒不差地走向归零），照它推送就是「没满却说满了」。
+    // 复核走的是和用户查询同源的接口，cur>=max 才算数。
+    //
+    // 复核不通过 → 按服务器新给的倒计时重挂，不推送、不落盘 fired（下一次到点再复核）。
+    // 复核本身失败（接口挂了/没凭证）→ 放行发送：宁可偶尔误报，也别把真提醒吞了。
+    const verdict = await verifyDeadline({ game, uid, type })
+    if (verdict?.ready === false) {
+      defer(game, uid, type, verdict)
+      return
+    }
+    // 复核通过时拿到的是**刚查回来的**真身，比记录里那份旧快照准，优先用它出图
+    // （同时写回记录，别让后续展示继续用过期数据）
+    if (verdict?.snap && typeof verdict.snap === 'object') {
+      item = { ...item, ...verdict.snap }
+      const s = loadStore()
+      if (s?.[game]?.[uid]) {
+        s[game][uid].snap = { ...(s[game][uid].snap || {}), ...verdict.snap }
+        s[game][uid].updatedAt = Date.now()
+        saveStore(s)
+      }
+    }
+
     await _hooks.send?.({ game, uid, type, targets, item })
   } catch (err) {
     const n = Number(st.attempt || 0) + 1
@@ -319,11 +474,81 @@ async function fire(game, uid, type) {
   if (loadStore()?.[game]?.[uid]?.[type]?.state === 'armed') markFired(game, uid, type)
 }
 
+/**
+ * 复核用：拿一份**刚查到的**快照，判断某类提醒此刻是否真的可发。
+ *
+ * 解析逻辑必须和 recordResinTimer 同源 —— 两边各写一套必然漂移，
+ * 到时候「记的时候算一个数、复核的时候算另一个数」，永远发不出去。
+ *
+ * @returns {{ready:boolean, dueAt:number|null, snap:object}|null}
+ *   null = 这份快照里没有该类提醒的信息（比如 widget 不返回质变仪，
+ *          或是还没获得的账号）→ 调用方按「复核不了」处理，放行发送
+ */
+export function evaluateSnapshot(game, uid, data) {
+  if (game !== 'gs' || !data || typeof data !== 'object') return null
+  const now = Date.now()
+  const out = {}
+
+  // 洞天宝钱：判据只有 cur >= max，**不能复用 readHomeCoinDeadline**。
+  // 那个函数在 sec 无效时返回 null（用来表示「算不出到期时刻，别挂定时器」），
+  // 但复核场景下 null 会被当成「这个快照没这类信息」→ 上层放行发送 ——
+  // 而 sec 归零恰恰就是假推送的触发条件（米游社倒计时走完、实际没满）。
+  // 所以这里独立判定：没满就 ready:false，算不算得出下次时刻是另一回事。
+  const hcCur = Number(data.current_home_coin)
+  const hcMax = Number(data.max_home_coin)
+  if (Number.isFinite(hcCur) && Number.isFinite(hcMax) && hcMax > 0) {
+    if (hcCur >= hcMax) {
+      out.homeCoin = { ready: true, dueAt: null }
+    } else {
+      const sec = Number(data.home_coin_recovery_time)
+      out.homeCoin = {
+        ready: false,
+        // sec 有效就按它约下一次；无效（0/缺失）给 null，交给 defer 用兜底间隔
+        dueAt: Number.isFinite(sec) && sec > 0 ? now + sec * 1000 : null,
+      }
+    }
+  }
+
+  // 参量质变仪：widget 快照不带这个字段 → 整条跳过（下面的 null 语义：
+  // 复核不了就放行，别把能发的提醒拦死）。有字段时按冷却是否结束判。
+  const tf = readTransformerDeadline(data, now)
+  if (tf) {
+    out.transformer = tf.kind === 'ready'
+      ? { ready: true, dueAt: null }
+      : { ready: false, dueAt: tf.dueAt }
+  } else if (data?.transformerView?.ok === false) {
+    // ⚠️ 只有归一视图、没有原始结构时（记录里存的快照就是这样），
+    // readTransformerDeadline 返回 null。但 null 在这里的语义是「没信息、放行」，
+    // 而 view.ok===false 是**明确说还在冷却**（文案就写着「4天后可再次使用」）——
+    // 拿它当「没信息」放行，就是「没冷却完却 @ 人说能用了」，与宝钱那个 bug 同源。
+    // view 里只有「N天后」文本、没有秒数，算不出精确时刻 → dueAt 给 null，
+    // 交给 defer 用兜底间隔接着等。
+    out.transformer = { ready: false, dueAt: null }
+  }
+
+  if (!Object.keys(out).length) return null
+  out.snap = {
+    uid: String(uid),
+    current_home_coin: Number(data.current_home_coin) || 0,
+    max_home_coin: Number(data.max_home_coin) || 0,
+    home_coin_recovery_time: data.home_coin_recovery_time,
+    transformer: data.transformer || null,
+    transformerView: data.transformerView
+      ? { ok: !!data.transformerView.ok, text: String(data.transformerView.text || '') }
+      : null,
+  }
+  return out
+}
+
 // ============ 对外 API ============
 
-/** resinPush 构造时注册「发给谁 / 怎么发」 */
+/** resinPush 构造时注册「发给谁 / 怎么发 / 到点怎么复核」 */
 export function registerReminderHooks(hooks = {}) {
-  _hooks = { targets: hooks.targets || null, send: hooks.send || null }
+  _hooks = {
+    targets: hooks.targets || null,
+    send: hooks.send || null,
+    verify: hooks.verify || null,
+  }
 }
 
 /**
@@ -347,14 +572,23 @@ export function recordResinTimer(game, uid, data) {
   if (hc) rec.homeCoin = mergeDeadline(rec.homeCoin, hc, now)
   // 精简快照：到点要出提醒卡，但那时手上只有记录（不重查接口）。
   // 只存渲染用得上的几个字段，别把整个 data（含 expeditions 等）塞进来。
-  rec.snap = {
-    uid: key,
-    current_home_coin: Number(data.current_home_coin) || 0,
-    max_home_coin: Number(data.max_home_coin) || 0,
-    transformerView: data.transformerView
-      ? { ok: !!data.transformerView.ok, text: String(data.transformerView.text || '') }
-      : null,
+  // ⚠️ home_coin_recovery_time / transformer 这两个是给「到点复核没通过、
+  // 要用新快照重算 dueAt」用的（见 defer）—— 缺了它们复核发现没满时
+  // 算不出下一次预约时刻，定时器就断了。
+  //
+  // ⚠️ 合并写而不是整体替换：体力推送轮询走的是 widget，它**不返回**
+  // home_coin_recovery_time 和 transformer（只认 dailyNote）。整体替换的话每轮
+  // 轮询都会把上一次用户查询留下的好数据冲成 undefined，复核时就少一份参照。
+  const prevSnap = rec.snap || {}
+  const next = { ...prevSnap, uid: key }
+  if (data.current_home_coin !== undefined) next.current_home_coin = Number(data.current_home_coin) || 0
+  if (data.max_home_coin !== undefined) next.max_home_coin = Number(data.max_home_coin) || 0
+  if (data.home_coin_recovery_time !== undefined) next.home_coin_recovery_time = data.home_coin_recovery_time
+  if (data.transformer) next.transformer = data.transformer
+  if (data.transformerView) {
+    next.transformerView = { ok: !!data.transformerView.ok, text: String(data.transformerView.text || '') }
   }
+  rec.snap = next
   rec.updatedAt = now
   saveStore(store)
 
@@ -473,4 +707,13 @@ export function timerStats(game, uid) {
   return Object.keys(out).length ? out : null
 }
 
-export default { registerReminderHooks, recordResinTimer, scheduleTimers, refreshUidTimers, timerStats }
+/**
+ * 该 uid 上次查询留下的精简快照（原始数据，未判读）。
+ * 给复核做兜底用：接口查不到时拿它判「满没满」，返回 null 表示没记录。
+ */
+export function timerSnapshot(game, uid) {
+  const rec = loadStore()?.[game]?.[String(uid || '')]
+  return rec?.snap || null
+}
+
+export default { registerReminderHooks, recordResinTimer, scheduleTimers, refreshUidTimers, timerStats, timerSnapshot, evaluateSnapshot }

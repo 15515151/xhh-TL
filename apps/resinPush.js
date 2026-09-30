@@ -41,7 +41,7 @@ import { createUser } from '../utils/userBind.js'
 import { config, getRenderScaleStyle, pluginDir } from '../utils/pluginConfig.js'
 import { listWavesAccounts, fetchWavesStamina, isWavesTlEnabled, getWavesEnvError } from '../utils/wavesData.js'
 import { quoteEnabled } from '../utils/replyHelper.js'
-import { registerReminderHooks, scheduleTimers, refreshUidTimers, timerStats } from '../utils/resinTimer.js'
+import { registerReminderHooks, scheduleTimers, refreshUidTimers, timerStats, timerSnapshot, evaluateSnapshot } from '../utils/resinTimer.js'
 
 const DATA_DIR = path.join(pluginDir, 'data')
 const CONFIG_FILE = path.join(DATA_DIR, 'resin_push.json')
@@ -201,6 +201,7 @@ export class resinPush extends plugin {
     registerReminderHooks({
       targets: (game, uid) => this.reminderTargets(game, uid),
       send: (info) => this.sendReminder(info),
+      verify: (info) => this.verifyReminder(info),
     })
     scheduleTimers()
   }
@@ -836,6 +837,84 @@ export class resinPush extends plugin {
       out.push({ qq, group: sub.group })
     }
     return out
+  }
+
+  /**
+   * 到点复核：拿一份**此刻的真身**，确认该提醒是不是真的到了。
+   *
+   * 为什么非做不可：定时器的到点时刻是照 dailyNote 的倒计时字段算的，
+   * 而洞天宝钱的 home_coin_recovery_time 会和实际库存脱钩 —— 实测 cur 卡在
+   * 990/2400 一个多小时不动，倒计时却一秒不差地走向归零。照倒计时推送就是
+   * 「没满却 @ 人说满了」（2026-09-30 04:08 那条假推送）。
+   *
+   * 复核走用户查询同一条路（带明细、跳过视图缓存），判据回到唯一可信的 cur>=max。
+   *
+   * ⚠️ 查询失败（风控 1034 / 凭证过期 / 网络抖动）**不等于「已满」**。
+   * 早期这里对失败返回 null、上层按「放行发送」处理 —— 那是错的：查不到就用
+   * 「我不知道」推出「满了」，跟这次 bug 是同一个毛病。现在失败时退回到
+   * **记录里存的上次快照**判断：快照说没满就按它接着等，快照也说满了才放行。
+   * 实在一点信息都没有（快照也没有）才返回 null。
+   *
+   * @returns {{ready:boolean, dueAt?:number|null, snap?:object}|null}
+   *   null = 连兜底快照都没有，判不了（会退化成旧的「照倒计时发」行为）
+   */
+  async verifyReminder({ game, uid, type }) {
+    if (game !== 'gs' || !uid) return null
+    // 用订阅者本人去查：凭证是按 QQ+UID 选的，复核必须走同一条鉴权路径，
+    // 否则拿到的可能是别人的号（原神 widget 不带 uid、只认 stoken 属主）。
+    const targets = this.reminderTargets(game, uid)
+    const t = targets[0]
+    if (!t) return null
+
+    let data = null
+    try {
+      const fakeE = this.makeFakeE(t.qq, t.group)
+      // forceNoteDetail：连 30 分钟视图缓存也跳过。缓存里只有质变仪的 ok/text，
+      // 没有洞天宝钱的 home_coin_recovery_time —— 命中缓存就和没复核一样。
+      data = await new TL().note(fakeE, 'gs', true, null, uid, { forceNoteDetail: true })
+    } catch (err) {
+      logger?.debug?.(`[xhh-TL][到期提醒] 复核查询失败 ${uid}: ${err?.message}`)
+      data = null
+    }
+
+    if (data && typeof data === 'object') {
+      const evalAll = evaluateSnapshot(game, uid, data)
+      const v = evalAll?.[type]
+      if (v) return { ready: v.ready, dueAt: v.dueAt, snap: evalAll.snap }
+      // 这份快照里没有该类信息（比如还没获得质变仪）→ 落到下面走兜底
+    }
+
+    // 查询没拿到有效信息 → 用记录里上次查询留下的快照兜底判断。
+    // 它必然滞后，但判「满没满」够用：宝钱只会往上涨，旧快照说没满就是没满。
+    const fallback = this.snapshotVerdict(uid, type)
+    if (fallback) {
+      logger?.debug?.(
+        `[xhh-TL][到期提醒] 复核没拿到新数据，用记录快照判定 ${type} uid=${uid} → ${fallback.ready ? '放行' : '继续等'}`,
+      )
+    }
+    return fallback
+  }
+
+  /**
+   * 兜底判据：拿订阅记录里那份**上次查询的快照**判该提醒到没到。
+   * 仅在复核查询失败时用（见 verifyReminder）。判不了返回 null。
+   *
+   * 判读逻辑直接复用 evaluateSnapshot —— 快照的结构和接口响应同源
+   * （recordResinTimer 就是挑着存的这几个字段），没必要另写一套必然漂移的判据。
+   */
+  snapshotVerdict(uid, type) {
+    let snap = null
+    try {
+      snap = timerSnapshot('gs', String(uid))
+    } catch (_) {
+      return null
+    }
+    if (!snap || typeof snap !== 'object') return null
+
+    const evalAll = evaluateSnapshot('gs', String(uid), snap)
+    const v = evalAll?.[type]
+    if (!v) return null
+    return { ready: v.ready, dueAt: v.dueAt, snap: evalAll.snap }
   }
 
   /**

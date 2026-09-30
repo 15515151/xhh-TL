@@ -1825,6 +1825,14 @@ export class TL extends plugin {
 
           // 2) 冷却期内不重试；自动路径（体力推送轮询）传了 allowDetail=false，
           //    同样不补拉——上面命中缓存时照常展示，只是不再为它发新请求
+          //
+          //    ⚠️ opts.forceNoteDetail（到期提醒的到点复核用）要**连视图缓存也跳过**：
+          //    复核的目的是拿一份「此刻的真身」，而视图缓存最长 30 分钟、只判质变仪
+          //    的 ok/text，不含洞天宝钱的 home_coin_recovery_time。命中缓存就 return 的话，
+          //    复核会拿到一份没有 sec 的快照 → 算不出下一次预约时刻 → 复核形同虚设。
+          //    这条路径只在提醒到点时走一次（一个完整周期才一次，最长 7 天），
+          //    多打一个 dailyNote 完全可接受；冷却键仍然尊重（撞风控时不硬顶）。
+          if (opts.forceNoteDetail && cached) view = null;
           if (!view && opts.allowDetail !== false) {
             let cooling = null;
             try { cooling = await redis.get(`xhh:transformer_cool:${stuid}`); } catch (_) {}
